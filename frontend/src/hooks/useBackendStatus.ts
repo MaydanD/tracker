@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { ApiConnectionError, ApiError } from '../api/client'
+import { ApiConnectionError, ApiError, CONNECTION_ERROR_MESSAGE, describeApiError } from '../api/client'
 import { fetchHealth, fetchReadiness } from '../api/system'
 import type { HealthResponse, ReadinessResponse } from '../api/types'
 
@@ -9,7 +9,7 @@ export type BackendStatus =
   | 'checking'
   /** Backend answered and reported a working database. */
   | 'healthy'
-  /** Backend answered but is not ready (database unavailable). */
+  /** Backend answered but is not ready (database unavailable or schema behind). */
   | 'degraded'
   /** Backend could not be reached at all. */
   | 'offline'
@@ -34,18 +34,26 @@ export interface UseBackendStatusOptions {
  */
 const GATEWAY_UNAVAILABLE_STATUSES = new Set([502, 503, 504])
 
-const UNREACHABLE_MESSAGE =
-  'Cannot reach the Tracker backend. Start it with `python -m app` in backend/.'
-
 /** Turn a failed check into a message a developer can act on. */
 function describeFailure(cause: unknown): string {
-  if (cause instanceof ApiConnectionError) return UNREACHABLE_MESSAGE
+  if (cause instanceof ApiConnectionError) return CONNECTION_ERROR_MESSAGE
   if (cause instanceof ApiError) {
     return GATEWAY_UNAVAILABLE_STATUSES.has(cause.status)
-      ? UNREACHABLE_MESSAGE
-      : cause.message
+      ? CONNECTION_ERROR_MESSAGE
+      : describeApiError(cause)
   }
-  return 'Unexpected error while checking the backend.'
+  return 'Не удалось проверить состояние сервера.'
+}
+
+/**
+ * Readiness reports *state* rather than raising, so explain which check failed.
+ */
+function describeReadiness(readiness: ReadinessResponse): string | null {
+  if (readiness.status === 'ready') return null
+  if (readiness.checks.migrations === 'pending') {
+    return 'Базу данных нужно обновить. Остановите сервер и выполните «alembic upgrade head» в папке backend/.'
+  }
+  return 'Сервер работает, но база данных недоступна.'
 }
 
 /**
@@ -82,14 +90,12 @@ export function useBackendStatus(
         const readinessResponse = await fetchReadiness(controller.signal)
         if (disposed || id !== checkId.current) return
 
+        const readinessMessage = describeReadiness(readinessResponse)
+
         setHealth(healthResponse)
         setReadiness(readinessResponse)
-        setStatus(readinessResponse.status === 'ready' ? 'healthy' : 'degraded')
-        setError(
-          readinessResponse.status === 'ready'
-            ? null
-            : 'The backend is running but its database is unavailable.',
-        )
+        setStatus(readinessMessage === null ? 'healthy' : 'degraded')
+        setError(readinessMessage)
         setLastCheckedAt(new Date())
       } catch (cause) {
         if (disposed || controller.signal.aborted) return

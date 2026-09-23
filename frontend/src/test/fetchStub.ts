@@ -33,7 +33,7 @@ export const HEALTHY_HEALTH: HealthResponse = {
 
 export const READY: ReadinessResponse = {
   status: 'ready',
-  checks: { database: 'ok' },
+  checks: { database: 'ok', migrations: 'ok' },
 }
 
 /** Stub the global fetch with a handler for every request. */
@@ -67,5 +67,59 @@ export function stubHealthyBackend(options: {
 export function stubUnreachableBackend() {
   return stubFetch(async () => {
     throw new TypeError('Failed to fetch')
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Route-based stubbing
+// ---------------------------------------------------------------------------
+
+export interface StubRequest {
+  method: string
+  /** Path only, without query string: e.g. `/api/habits/3`. */
+  path: string
+  query: URLSearchParams
+  /** Parsed JSON body, when the request sent one. */
+  body: unknown
+}
+
+export type StubHandler = (request: StubRequest) => Response
+
+function parseBody(body: unknown): unknown {
+  if (typeof body !== 'string' || body === '') return null
+  try {
+    return JSON.parse(body)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Stub the API by route, keyed `"METHOD /path"` (query string excluded).
+ * Unmatched requests answer 404 with the standard error envelope so a missing
+ * stub fails loudly instead of looking like an empty list.
+ */
+export function stubApi(
+  routes: Record<string, StubHandler>,
+  options: { fallback?: StubHandler } = {},
+) {
+  return stubFetch(async (input, init) => {
+    const url = new URL(String(input), 'http://localhost')
+    const method = (init?.method ?? 'GET').toUpperCase()
+    const request: StubRequest = {
+      method,
+      path: url.pathname,
+      query: url.searchParams,
+      body: parseBody(init?.body),
+    }
+
+    const handler = routes[`${method} ${url.pathname}`]
+    if (handler) return handler(request)
+    if (options.fallback) return options.fallback(request)
+
+    return jsonResponse(
+      { error: { code: 'not_found', message: `No stub for ${method} ${url.pathname}` } },
+      404,
+    )
   })
 }

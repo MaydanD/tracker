@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from alembic import command
 from alembic.config import Config
@@ -12,6 +13,9 @@ from app.db.database import create_db_engine
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 ALEMBIC_INI = BACKEND_DIR / "alembic.ini"
+
+STAGE_1_REVISION = "0001"
+STAGE_2_REVISION = "8c12a1c62d83"
 
 
 def alembic_config(database_url: str) -> Config:
@@ -35,3 +39,21 @@ def table_names(database_url: str) -> list[str]:
             return inspect(connection).get_table_names()
     finally:
         engine.dispose()
+
+
+def habit_payload(**overrides: Any) -> dict[str, Any]:
+    """A valid habit payload; override individual fields as needed.
+
+    ``area_id`` is intentionally absent so tests state which area they use.
+    """
+    payload: dict[str, Any] = {
+        "name": "Reading",
+        "description": None,
+        "weight": 1,
+        "tracking_mode": "binary",
+        "quantity_unit": None,
+        "quantity_allows_decimal": False,
+        "schedule": {"type": "daily"},
+    }
+    payload.update(overrides)
+    return payload

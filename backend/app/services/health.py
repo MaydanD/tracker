@@ -9,6 +9,7 @@ from __future__ import annotations
 from sqlalchemy import text
 
 from app.db.database import Database
+from app.db.migrations import SchemaStatus, schema_status
 
 
 def check_database(database: Database) -> None:
@@ -20,3 +21,14 @@ def check_database(database: Database) -> None:
     """
     with database.session() as session:
         session.execute(text("SELECT 1"))
+
+
+def check_schema(database: Database) -> SchemaStatus:
+    """Report whether the database schema matches the code.
+
+    A migrated-but-reachable database still cannot serve product endpoints when
+    the schema is behind, so readiness reports that separately from
+    connectivity. Raises :class:`sqlalchemy.exc.SQLAlchemyError` if the check
+    itself cannot be performed.
+    """
+    return schema_status(database)

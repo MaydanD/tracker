@@ -9,7 +9,7 @@ from starlette.responses import JSONResponse
 from app.api.dependencies import DatabaseDep, SettingsDep
 from app.core.logging import get_logger
 from app.schemas.health import HealthResponse, ReadinessResponse
-from app.services.health import check_database
+from app.services.health import check_database, check_schema
 
 logger = get_logger(__name__)
 
@@ -33,25 +33,43 @@ def read_health(settings: SettingsDep) -> HealthResponse:
     responses={
         503: {
             "model": ReadinessResponse,
-            "description": "The database is not reachable.",
+            "description": "The database is unreachable or its schema is out of date.",
         }
     },
     summary="Readiness probe",
 )
 def read_readiness(database: DatabaseDep) -> JSONResponse:
-    """Check the database with a real query.
+    """Check that the application can actually do its job.
 
-    A readiness probe reports *state*, so the failure path answers 503 with the
-    same body shape as the success path (``checks.database``) instead of raising
-    an error — the frontend can then show "database unavailable" without having
-    to interpret an error envelope.
+    Two things are verified: the database answers a real query, and its schema
+    matches the revision this code expects. A readiness probe reports *state*, so
+    the failure path answers 503 with the same body shape as the success path
+    (``checks``) instead of raising an error — the frontend can then explain what
+    is wrong without interpreting an error envelope.
+
+    A database that is behind on migrations is a genuine not-ready state: product
+    endpoints would fail with "no such table", so reporting it here turns an
+    opaque 500 into an actionable message.
     """
     try:
         check_database(database)
+        schema = check_schema(database)
     except SQLAlchemyError:
         logger.warning("Readiness check failed: database unavailable", exc_info=True)
         payload = ReadinessResponse(status="unavailable", checks={"database": "error"})
         return JSONResponse(status_code=503, content=payload.model_dump())
 
-    payload = ReadinessResponse(status="ready", checks={"database": "ok"})
+    if schema == "pending":
+        logger.error(
+            "Readiness check failed: database schema is out of date. "
+            "Run 'alembic upgrade head' in backend/."
+        )
+        payload = ReadinessResponse(
+            status="unavailable", checks={"database": "ok", "migrations": "pending"}
+        )
+        return JSONResponse(status_code=503, content=payload.model_dump())
+
+    payload = ReadinessResponse(
+        status="ready", checks={"database": "ok", "migrations": schema}
+    )
     return JSONResponse(status_code=200, content=payload.model_dump())

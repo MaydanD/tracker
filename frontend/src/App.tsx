@@ -1,6 +1,7 @@
 import { HashRouter, Route, Routes } from 'react-router-dom'
 
 import { AppShell } from './layout/AppShell'
+import { AreasPage } from './pages/AreasPage'
 import { CalendarPage } from './pages/CalendarPage'
 import { CheckInPage } from './pages/CheckInPage'
 import { DashboardPage } from './pages/DashboardPage'
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="check-in" element={<CheckInPage />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="habits" element={<HabitsPage />} />
+          <Route path="areas" element={<AreasPage />} />
           <Route path="insights" element={<InsightsPage />} />
           <Route path="experiments" element={<ExperimentsPage />} />
           <Route path="records" element={<RecordsPage />} />

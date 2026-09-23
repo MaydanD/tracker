@@ -46,15 +46,44 @@ def test_factory_returns_independent_applications(tmp_path: Path) -> None:
     second.state.database.dispose()
 
 
-def test_openapi_documents_the_system_endpoints(client: TestClient) -> None:
+EXPECTED_PATHS = {
+    # Stage 1
+    "/api/health",
+    "/api/ready",
+    # Stage 2 — areas
+    "/api/areas",
+    "/api/areas/{area_id}",
+    "/api/areas/{area_id}/archive",
+    "/api/areas/{area_id}/unarchive",
+    # Stage 2 — habits
+    "/api/habits",
+    "/api/habits/{habit_id}",
+    "/api/habits/{habit_id}/archive",
+    "/api/habits/{habit_id}/unarchive",
+    "/api/habits/{habit_id}/versions",
+    "/api/habits/{habit_id}/configuration",
+}
+
+
+def test_openapi_documents_every_endpoint(client: TestClient) -> None:
     response = client.get("/api/openapi.json")
 
     assert response.status_code == 200
-    paths = response.json()["paths"]
-    assert "/api/health" in paths
-    assert "/api/ready" in paths
-    # Stage 1 exposes nothing else.
-    assert set(paths) == {"/api/health", "/api/ready"}
+    assert set(response.json()["paths"]) == EXPECTED_PATHS
+
+
+def test_habits_and_areas_cannot_be_hard_deleted(client: TestClient) -> None:
+    """Archiving protects history; no delete endpoints may creep in."""
+    schema = client.get("/api/openapi.json").json()
+
+    delete_operations = [
+        f"{method.upper()} {path}"
+        for path, operations in schema["paths"].items()
+        for method in operations
+        if method.lower() == "delete"
+    ]
+
+    assert delete_operations == []
 
 
 def test_interactive_docs_are_available(client: TestClient) -> None:

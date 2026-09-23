@@ -46,7 +46,12 @@ export class ApiConnectionError extends Error {
   }
 }
 
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH'
+
 export interface RequestOptions {
+  method?: HttpMethod
+  /** JSON-serialised request body, when the method takes one. */
+  body?: unknown
   signal?: AbortSignal
   timeoutMs?: number
   /**
@@ -55,6 +60,92 @@ export interface RequestOptions {
    * answers 503 when the database is unreachable).
    */
   acceptStatuses?: number[]
+}
+
+/** Shown whenever nothing answered at all (backend stopped, wrong port). */
+export const CONNECTION_ERROR_MESSAGE =
+  'Не удалось подключиться к серверу Tracker. Запустите его командой `python -m app` в папке backend/.'
+
+/**
+ * Turn any thrown value into a message worth showing a user.
+ *
+ * Keep the original error envelope for diagnostics. Only known codes and
+ * structured field metadata are rendered; raw server messages may be English.
+ */
+export function describeApiError(error: unknown): string {
+  if (error instanceof ApiConnectionError) return CONNECTION_ERROR_MESSAGE
+  if (error instanceof ApiError) {
+    const fields = fieldMessages(error)
+    const message = ERROR_MESSAGES[error.code]
+      ?? (error.status >= 500
+        ? 'Сервер не смог выполнить запрос. Попробуйте ещё раз.'
+        : 'Не удалось выполнить запрос. Проверьте данные и попробуйте ещё раз.')
+    return fields.length > 0 ? `${message} ${fields.join(' ')}` : message
+  }
+  return 'Произошла непредвиденная ошибка. Попробуйте ещё раз.'
+}
+
+const ERROR_MESSAGES: Record<string, string> = {
+  area_not_found: 'Сфера не найдена. Обновите страницу.',
+  area_name_conflict: 'Активная сфера с таким названием уже существует.',
+  area_has_active_habits: 'В этой сфере есть активные привычки. Сначала перенесите их в другую сферу или в архив.',
+  area_archived: 'Эта сфера в архиве. Сначала восстановите сферу, затем сохраните или восстановите привычку.',
+  invalid_area_name: 'Введите название сферы длиной от 1 до 80 символов.',
+  invalid_area_color: 'Выберите цвет сферы в формате #4a7cc7.',
+  habit_not_found: 'Привычка не найдена. Обновите страницу.',
+  configuration_not_found: 'На выбранную дату у привычки ещё не было настроек.',
+  invalid_habit_name: 'Введите название привычки длиной от 1 до 120 символов.',
+  invalid_weight: 'Выберите важность: 1 — обычная, 2 — важная, 3 — ключевая.',
+  invalid_tracking_mode: 'Выберите способ учёта: отметка выполнения или отметка и количество.',
+  invalid_quantity_unit: 'Укажите единицу измерения длиной от 1 до 32 символов, например страницы, км или повторения.',
+  invalid_schedule: 'Проверьте расписание: выберите дни недели или число выполнений от 1 до 7.',
+  invalid_configuration_date: 'Изменение не может вступить в силу раньше текущей версии настроек.',
+  invalid_configuration: 'Проверьте настройки привычки.',
+  validation_error: 'Проверьте заполненные поля.',
+  database_unavailable: 'База данных недоступна. Попробуйте ещё раз.',
+  service_unavailable: 'Сервис временно недоступен. Попробуйте ещё раз.',
+  internal_error: 'На сервере произошла ошибка. Попробуйте ещё раз.',
+  not_found: 'Запрошенные данные не найдены.',
+  conflict: 'Данные изменились. Обновите страницу и попробуйте ещё раз.',
+  bad_request: 'Не удалось обработать запрос. Проверьте введённые данные.',
+  unauthorized: 'Доступ к серверу не разрешён.',
+  forbidden: 'Недостаточно прав для этого действия.',
+  method_not_allowed: 'Это действие недоступно.',
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  name: 'Название', description: 'Описание', color: 'Цвет', area_id: 'Сфера',
+  weight: 'Важность', tracking_mode: 'Способ учёта', quantity_unit: 'Единица измерения',
+  quantity_allows_decimal: 'Дробные значения', schedule: 'Расписание',
+  type: 'Тип расписания', weekdays: 'Дни недели', times_per_week: 'Выполнений в неделю',
+  on: 'Дата', include_archived: 'Показывать архивные',
+}
+
+function fieldMessages(error: ApiError): string[] {
+  const errors = error.details?.['errors']
+  if (!Array.isArray(errors)) return []
+  return errors
+    .slice(0, 5)
+    .map((entry) => {
+      if (typeof entry !== 'object' || entry === null) return ''
+      const { loc, type, ctx } = entry as { loc?: unknown; type?: string; ctx?: Record<string, unknown> }
+      const field = Array.isArray(loc)
+        ? loc.filter((part): part is string => typeof part === 'string' && part in FIELD_LABELS).at(-1)
+        : undefined
+      const label = field ? FIELD_LABELS[field] : 'Данные'
+      if (type === 'missing') return `${label}: заполните поле.`
+      if (type === 'string_too_long' && typeof ctx?.max_length === 'number') {
+        return `${label}: не более ${ctx.max_length} символов.`
+      }
+      if (type === 'string_too_short' && typeof ctx?.min_length === 'number') {
+        return `${label}: не менее ${ctx.min_length} символов.`
+      }
+      if (type === 'int_parsing' || type === 'int_type' || type === 'int_from_float') {
+        return `${label}: введите целое число.`
+      }
+      return `${label}: проверьте значение.`
+    })
+    .filter((message) => message.length > 0)
 }
 
 function isErrorResponse(value: unknown): value is ErrorResponse {
@@ -81,7 +172,13 @@ export async function apiRequest<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { signal, timeoutMs = DEFAULT_TIMEOUT_MS, acceptStatuses = [] } = options
+  const {
+    method = 'GET',
+    body,
+    signal,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    acceptStatuses = [],
+  } = options
   const url = `${API_BASE_URL}${path}`
 
   const controller = new AbortController()
@@ -90,11 +187,17 @@ export async function apiRequest<T>(
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
+    // Content-Type is only sent with a body, so read-only requests stay simple.
+    const headers: Record<string, string> = { Accept: 'application/json' }
+    if (body !== undefined) headers['Content-Type'] = 'application/json'
+
     let response: Response
     try {
       response = await fetch(url, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
         signal: controller.signal,
-        headers: { Accept: 'application/json' },
       })
     } catch (cause) {
       if (signal?.aborted) throw cause

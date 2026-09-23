@@ -16,14 +16,42 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.router import api_router
 from app.core.config import Settings, get_settings, unknown_environment_variables
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
-from app.db.database import create_database
+from app.db.database import Database, create_database
+from app.db.migrations import applied_revision, expected_revision, schema_status
 
 logger = get_logger(__name__)
+
+
+def log_schema_state(database: Database) -> None:
+    """Report at startup whether the database is behind on migrations.
+
+    Startup deliberately does not fail: ``/api/health`` must stay reachable so the
+    UI can explain what is wrong, and ``/api/ready`` reports the pending migration
+    as not ready.
+    """
+    try:
+        status = schema_status(database)
+    except SQLAlchemyError:
+        logger.warning("Could not determine the database schema state", exc_info=True)
+        return
+
+    if status == "ok":
+        logger.info("Database schema is up to date (%s)", expected_revision())
+    elif status == "pending":
+        logger.error(
+            "Database schema is out of date (at %r, expected %r). "
+            "Run 'alembic upgrade head' in backend/.",
+            applied_revision(database),
+            expected_revision(),
+        )
+    else:
+        logger.info("Database schema state not checked (migration files unavailable)")
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -48,6 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings.app_version,
         )
         logger.info("Database: %s", settings.resolved_database_path)
+        log_schema_state(app.state.database)
         try:
             yield
         finally:

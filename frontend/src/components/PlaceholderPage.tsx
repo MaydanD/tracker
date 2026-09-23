@@ -8,7 +8,7 @@ export interface PlaceholderPageProps {
 }
 
 /**
- * Stage 1 screens are intentionally empty: this renders the shell's content
+ * Этап 1 screens are intentionally empty: this renders the shell's content
  * area with a clear statement of what the screen will become and when.
  */
 export function PlaceholderPage({
@@ -21,16 +21,14 @@ export function PlaceholderPage({
     <section className="page">
       <header className="page__header">
         <h1 className="page__title">{title}</h1>
-        <span className="badge">Planned for {plannedIn}</span>
+        <span className="badge">Запланировано: {plannedIn}</span>
       </header>
       <p className="page__summary">{summary}</p>
       {children}
       <div className="placeholder">
-        <p className="placeholder__title">Not implemented yet</p>
+        <p className="placeholder__title">Раздел пока в разработке</p>
         <p className="placeholder__text">
-          Stage 1 delivers the foundation only — database, migrations, API shell,
-          health checks and this application frame. The screen above is added in{' '}
-          {plannedIn}.
+          Сейчас доступны сферы и настройка привычек. Этот раздел появится позже: {plannedIn}.
         </p>
       </div>
     </section>

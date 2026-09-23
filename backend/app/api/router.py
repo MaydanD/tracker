@@ -1,14 +1,15 @@
 """Aggregate router for the whole API surface.
 
-Stage 1 exposes only the system endpoints. Stage 2+ adds one router per
-resource area (areas, habits, entries, ...) and includes it here.
+Stage 1 exposed the system endpoints; Stage 2 adds areas and habits.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.routes import health
+from app.api.routes import areas, habits, health
 
 api_router = APIRouter()
 api_router.include_router(health.router)
+api_router.include_router(areas.router)
+api_router.include_router(habits.router)

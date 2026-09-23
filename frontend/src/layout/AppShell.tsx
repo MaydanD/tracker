@@ -21,7 +21,7 @@ export function AppShell() {
         <header className="topbar">
           <div>
             <p className="topbar__eyebrow">Tracker</p>
-            <h2 className="topbar__title">{current?.label ?? 'Unknown screen'}</h2>
+            <h2 className="topbar__title">{current?.label ?? 'Неизвестный раздел'}</h2>
           </div>
           <BackendStatus backend={backend} />
         </header>

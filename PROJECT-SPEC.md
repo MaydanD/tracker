@@ -60,6 +60,19 @@ Mobile support may be added later, but it is not a current requirement.
 
 ---
 
+### 2.1 Язык приложения — постоянное требование
+
+Основной и текущий язык пользовательского интерфейса Tracker — **русский**.
+
+- Все пользовательские тексты должны быть на естественном русском: навигация, кнопки, формы, статусы, валидация, пустые состояния, подсказки, ошибки и системные сообщения.
+- Нельзя случайно смешивать русский и английский в интерфейсе. Название продукта Tracker, технические команды и введённые пользователем данные сохраняются как есть.
+- Python/TypeScript identifiers, API fields, DB schema, enum values и filenames могут оставаться английскими. Технические коды и сообщения API преобразуются в понятные русские сообщения на границе UI; error envelope сохраняется.
+- Полноценная мультиязычная i18n-система пока не нужна: для одного языка достаточно русских строк и небольших функций форматирования.
+- Все будущие этапы обязаны соблюдать это правило. Английские примеры и названия разделов в спецификации описывают понятия, а не готовый текст интерфейса.
+- Термин Check-in в интерфейсе — **«Итоги дня»**, последовательно во всех разделах.
+
+---
+
 ## 3. Areas
 
 An Area is a broad, persistent life sphere.
@@ -809,6 +822,21 @@ The application needs habit configuration history/versioning.
 
 Do not simply overwrite historical meaning.
 
+### 21.1 Implemented strategy (Stage 2)
+
+Habit configuration is stored as effective-dated versions instead of on the habit row itself. Earlier days' versions are preserved; edits on the current version's day update that version. "Current configuration" is the latest version, and any past date resolves to the version that was effective then.
+
+Rules:
+
+- one version per habit per calendar day: an edit made on the same day updates that day's version instead of stacking duplicates;
+- an edit that takes effect after the current version appends a new version;
+- an edit that would take effect *before* the current version is rejected rather than rewriting recorded meaning (backdating may be added later if it is genuinely needed);
+- saving an unchanged configuration creates no new version.
+
+Same-day collapse remains the Stage 2 rule. Revisit effective-date semantics in Stage 3 when real daily entries exist; do not change it as part of UI localisation. Duplicate habit names within an Area are allowed.
+
+Area name and colour changes are not versioned: they are display metadata, and historical habit configuration keeps referential integrity through `area_id`.
+
 ---
 
 ## 22. Archive
@@ -816,6 +844,8 @@ Do not simply overwrite historical meaning.
 Habits and Areas should normally be archived rather than hard-deleted once historical records exist.
 
 Archived habits remain visible in history and analytics.
+
+An Area that still has active habits cannot be archived: those habits must be archived or moved first, so an active habit never points at an archived Area.
 
 ---
 

@@ -2,13 +2,33 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   jsonResponse,
+  stubApi,
   stubFetch,
   stubHealthyBackend,
 } from '../test/fetchStub'
-import { ApiConnectionError, ApiError, apiRequest } from './client'
+import { createArea, fetchAreas } from './areas'
+import { ApiConnectionError, ApiError, apiRequest, describeApiError } from './client'
+import { createHabit } from './habits'
 import { fetchHealth, fetchReadiness } from './system'
 
 describe('apiRequest', () => {
+  it('keeps English diagnostics but presents known errors in Russian', () => {
+    const error = new ApiError('An active area with that name already exists.', {
+      status: 409, code: 'area_name_conflict',
+    })
+    expect(describeApiError(error)).toBe('Активная сфера с таким названием уже существует.')
+    expect(error.message).toBe('An active area with that name already exists.')
+    expect(error.code).toBe('area_name_conflict')
+  })
+
+  it('does not expose unknown server or JavaScript messages', () => {
+    expect(describeApiError(new ApiError('SQL failure: internal path', {
+      status: 500, code: 'future_error',
+    }))).toBe('Сервер не смог выполнить запрос. Попробуйте ещё раз.')
+    expect(describeApiError(new Error('Failed to fetch')))
+      .toBe('Произошла непредвиденная ошибка. Попробуйте ещё раз.')
+  })
+
   it('returns the parsed JSON body of a successful request', async () => {
     stubHealthyBackend()
 
@@ -102,6 +122,58 @@ describe('apiRequest', () => {
     controller.abort()
 
     await expect(request).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('sends a JSON body with the right method and content type', async () => {
+    let seen: { method?: string; body?: unknown; contentType?: string } = {}
+    stubApi({
+      'POST /api/areas': (request) => {
+        seen = { method: request.method, body: request.body }
+        return jsonResponse({ id: 1, name: 'Health', color: '#4a7cc7' }, 201)
+      },
+    })
+
+    await createArea({ name: 'Health', color: '#4a7cc7' })
+
+    expect(seen.method).toBe('POST')
+    expect(seen.body).toEqual({ name: 'Health', color: '#4a7cc7' })
+  })
+
+  it('builds list query strings from filters', async () => {
+    const mock = stubFetch(async () => jsonResponse([]))
+
+    await fetchAreas({ includeArchived: true })
+
+    expect(mock).toHaveBeenCalledWith('/api/areas?include_archived=true', expect.anything())
+  })
+
+  it('surfaces domain errors from writes', async () => {
+    stubApi({
+      'POST /api/habits': () =>
+        jsonResponse(
+          {
+            error: {
+              code: 'invalid_quantity_unit',
+              message: 'A quantity unit is required for habits that track quantities.',
+            },
+          },
+          422,
+        ),
+    })
+
+    await expect(
+      createHabit({
+        name: 'Reading',
+        area_id: 1,
+        weight: 1,
+        tracking_mode: 'binary_quantity',
+        schedule: { type: 'daily' },
+      }),
+    ).rejects.toMatchObject({
+      name: 'ApiError',
+      code: 'invalid_quantity_unit',
+      status: 422,
+    })
   })
 
   it('gives up on a slow request and reports a connection error', async () => {

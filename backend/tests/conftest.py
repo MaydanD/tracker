@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -76,3 +77,21 @@ def client(app: FastAPI) -> Iterator[TestClient]:
     """Test client with lifespan events executed."""
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture()
+def health_area(client: TestClient) -> dict[str, Any]:
+    """An active 'Health' area, created through the API."""
+    response = client.post("/api/areas", json={"name": "Health", "color": "#2f9e5f"})
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+@pytest.fixture()
+def other_area(client: TestClient) -> dict[str, Any]:
+    """A second active area, created through the API."""
+    response = client.post(
+        "/api/areas", json={"name": "Development", "color": "#4a7cc7"}
+    )
+    assert response.status_code == 201, response.text
+    return response.json()

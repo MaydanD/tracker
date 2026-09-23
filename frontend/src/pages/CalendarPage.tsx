@@ -3,9 +3,9 @@ import { PlaceholderPage } from '../components/PlaceholderPage'
 export function CalendarPage() {
   return (
     <PlaceholderPage
-      title="Calendar"
-      plannedIn="Stage 6"
-      summary="Monthly calendar with full day detail, plus a yearly completion heatmap."
+      title="Календарь"
+      plannedIn="Этап 6"
+      summary="Календарь на месяц с подробностями каждого дня и тепловая карта выполнений за год."
     />
   )
 }

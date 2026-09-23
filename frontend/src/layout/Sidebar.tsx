@@ -11,11 +11,11 @@ export function Sidebar() {
         </span>
         <div>
           <p className="sidebar__name">Tracker</p>
-          <p className="sidebar__tagline">Local habit &amp; state analytics</p>
+          <p className="sidebar__tagline">Привычки, самочувствие и аналитика</p>
         </div>
       </div>
 
-      <nav className="sidebar__nav" aria-label="Main navigation">
+      <nav className="sidebar__nav" aria-label="Основная навигация">
         <ul>
           {NAVIGATION_ITEMS.map((item) => (
             <li key={item.path}>
@@ -36,8 +36,8 @@ export function Sidebar() {
       </nav>
 
       <footer className="sidebar__footer">
-        <p>Stage 1 — Foundation</p>
-        <p>Single local user · no cloud</p>
+        <p>Этапы 1–2 — Основа и настройка</p>
+        <p>Для вас · данные на компьютере</p>
       </footer>
     </aside>
   )

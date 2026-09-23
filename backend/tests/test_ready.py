@@ -14,7 +14,50 @@ def test_ready_reports_ready_with_a_migrated_database(client: TestClient) -> Non
     response = client.get("/api/ready")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ready", "checks": {"database": "ok"}}
+    assert response.json() == {
+        "status": "ready",
+        "checks": {"database": "ok", "migrations": "ok"},
+    }
+
+
+def test_ready_reports_unavailable_when_the_schema_is_behind(
+    tmp_path: Path,
+) -> None:
+    """A reachable but un-migrated database is not ready.
+
+    Product queries would fail with "no such table", so reporting not-ready here
+    is what lets the UI tell the user to run the migration instead of showing a
+    mysterious 500 later on.
+    """
+    settings = Settings(
+        _env_file=None,
+        app_env="test",
+        data_dir=tmp_path / "data",
+        log_level="WARNING",
+    )
+
+    with TestClient(create_app(settings)) as client:
+        response = client.get("/api/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "unavailable",
+        "checks": {"database": "ok", "migrations": "pending"},
+    }
+
+
+def test_health_still_works_when_the_schema_is_behind(tmp_path: Path) -> None:
+    """Liveness must survive a stale schema so the UI can explain the problem."""
+    settings = Settings(
+        _env_file=None,
+        app_env="test",
+        data_dir=tmp_path / "data",
+        log_level="WARNING",
+    )
+
+    with TestClient(create_app(settings)) as client:
+        assert client.get("/api/health").status_code == 200
+        assert client.get("/api/ready").status_code == 503
 
 
 def test_ready_reports_unavailable_when_database_cannot_be_opened(

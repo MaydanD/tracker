@@ -3,9 +3,9 @@ import { PlaceholderPage } from '../components/PlaceholderPage'
 export function RecordsPage() {
   return (
     <PlaceholderPage
-      title="Records"
-      plannedIn="Stage 11"
-      summary="Longest streaks, best weeks and months, highest quantities, plus decorative achievements."
+      title="Рекорды"
+      plannedIn="Этап 11"
+      summary="Самые длинные серии выполнений, лучшие недели и месяцы, рекорды количества и памятные достижения."
     />
   )
 }

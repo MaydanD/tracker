@@ -28,9 +28,9 @@ describe('App shell', () => {
     render(<App />)
 
     expect(
-      screen.getByRole('heading', { name: 'Dashboard', level: 1 }),
+      screen.getByRole('heading', { name: 'Обзор', level: 1 }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Not implemented yet')).toBeInTheDocument()
+    expect(screen.getByText('Раздел пока в разработке')).toBeInTheDocument()
   })
 
   it('reports a connected backend with the reported version', async () => {
@@ -39,10 +39,11 @@ describe('App shell', () => {
     render(<App />)
 
     await waitFor(() =>
-      expect(screen.getByText('Connected')).toBeInTheDocument(),
+      expect(screen.getByText('Подключено')).toBeInTheDocument(),
     )
-    expect(screen.getByText('Tracker 0.1.0 · test')).toBeInTheDocument()
-    expect(screen.getByText('ok')).toBeInTheDocument()
+    expect(screen.getByText('Tracker 0.1.0 · тестирование')).toBeInTheDocument()
+    // Database and schema both report ok.
+    expect(screen.getAllByText('В порядке')).toHaveLength(2)
   })
 
   it('reports a running backend whose database is unavailable', async () => {
@@ -53,9 +54,25 @@ describe('App shell', () => {
     render(<App />)
 
     await waitFor(() =>
-      expect(screen.getByText('Database unavailable')).toBeInTheDocument(),
+      expect(screen.getByText('База данных недоступна')).toBeInTheDocument(),
     )
-    expect(screen.getByText('error')).toBeInTheDocument()
+    expect(screen.getByText('Ошибка')).toBeInTheDocument()
+  })
+
+  it('explains a database whose schema is behind, with the migration command', async () => {
+    stubHealthyBackend({
+      readiness: {
+        status: 'unavailable',
+        checks: { database: 'ok', migrations: 'pending' },
+      },
+    })
+
+    render(<App />)
+
+    await waitFor(() =>
+      expect(screen.getByText('Требуется обновление базы')).toBeInTheDocument(),
+    )
+    expect(screen.getByRole('status')).toHaveTextContent('alembic upgrade head')
   })
 
   it('reports an unreachable backend with a hint', async () => {
@@ -64,7 +81,7 @@ describe('App shell', () => {
     render(<App />)
 
     await waitFor(() =>
-      expect(screen.getByText('Backend unreachable')).toBeInTheDocument(),
+      expect(screen.getByText('Сервер недоступен')).toBeInTheDocument(),
     )
     expect(screen.getByRole('status')).toHaveTextContent('python -m app')
   })
@@ -76,7 +93,7 @@ describe('App shell', () => {
     render(<App />)
 
     await waitFor(() =>
-      expect(screen.getByText('Backend unreachable')).toBeInTheDocument(),
+      expect(screen.getByText('Сервер недоступен')).toBeInTheDocument(),
     )
     expect(screen.getByRole('status')).toHaveTextContent('python -m app')
   })
@@ -85,22 +102,22 @@ describe('App shell', () => {
     stubHealthyBackend()
 
     render(<App />)
-    fireEvent.click(screen.getByRole('link', { name: /habits/i }))
+    fireEvent.click(screen.getByRole('link', { name: /инсайты/i }))
 
     expect(
-      await screen.findByRole('heading', { name: 'Habits and areas', level: 1 }),
+      await screen.findByRole('heading', { name: 'Инсайты', level: 1 }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Planned for Stage 2')).toBeInTheDocument()
+    expect(screen.getByText('Запланировано: Этап 8')).toBeInTheDocument()
   })
 
   it('rechecks the backend when asked', async () => {
     const fetchMock = stubHealthyBackend()
 
     render(<App />)
-    await waitFor(() => expect(screen.getByText('Connected')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Подключено')).toBeInTheDocument())
 
     const callsBefore = fetchMock.mock.calls.length
-    fireEvent.click(screen.getByRole('button', { name: 'Recheck' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Проверить снова' }))
 
     await waitFor(() =>
       expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore),

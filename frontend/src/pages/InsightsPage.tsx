@@ -3,9 +3,9 @@ import { PlaceholderPage } from '../components/PlaceholderPage'
 export function InsightsPage() {
   return (
     <PlaceholderPage
-      title="Insights"
-      plannedIn="Stage 8"
-      summary="Relationships found in your data, with lag, effect size, sample count and a supporting graph."
+      title="Инсайты"
+      plannedIn="Этап 8"
+      summary="Связи в ваших данных: задержка и величина эффекта, число наблюдений и наглядный график."
     />
   )
 }
