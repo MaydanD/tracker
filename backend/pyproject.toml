@@ -1,0 +1,12 @@
+# Tooling configuration only.
+# Dependencies live in requirements.txt / requirements-dev.txt so that a plain
+# `python -m venv` + `pip install -r` workflow works on Windows without any
+# packaging step.
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+# Makes `app` importable when pytest is run from backend/.
+pythonpath = ["."]
+addopts = "-q --strict-markers --strict-config"
+filterwarnings = ["ignore::DeprecationWarning:alembic.*"]

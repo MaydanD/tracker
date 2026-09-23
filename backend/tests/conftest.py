@@ -1,0 +1,78 @@
+"""Shared test fixtures.
+
+Every test runs against its own temporary data directory and SQLite file, so the
+developer's real ``.data/tracker.db`` is never opened, migrated or modified.
+"""
+
+from __future__ import annotations
+
+import os
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
+from app.core.config import Settings
+from app.db.database import Database, create_database
+from app.main import create_app
+from tests.helpers import run_migrations
+
+
+@pytest.fixture(autouse=True)
+def clean_tracker_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Remove ambient TRACKER_* variables so tests are deterministic."""
+    for name in list(os.environ):
+        if name.startswith("TRACKER_"):
+            monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture()
+def settings(tmp_path: Path) -> Settings:
+    """Isolated application settings (temp data dir, never a developer .env)."""
+    return Settings(
+        _env_file=None,
+        app_env="test",
+        data_dir=tmp_path / "data",
+        log_level="WARNING",
+    )
+
+
+@pytest.fixture()
+def migrated_settings(settings: Settings) -> Settings:
+    """Settings whose database has been created and migrated to head."""
+    settings.ensure_directories()
+    run_migrations(settings.resolved_database_url)
+    return settings
+
+
+@pytest.fixture()
+def database(migrated_settings: Settings) -> Iterator[Database]:
+    """Database container bound to the migrated temporary database."""
+    db = create_database(migrated_settings)
+    try:
+        yield db
+    finally:
+        db.dispose()
+
+
+@pytest.fixture()
+def session(database: Database) -> Iterator[Session]:
+    """A session against the migrated temporary database."""
+    with database.session() as db_session:
+        yield db_session
+
+
+@pytest.fixture()
+def app(migrated_settings: Settings) -> FastAPI:
+    """Application instance under test."""
+    return create_app(migrated_settings)
+
+
+@pytest.fixture()
+def client(app: FastAPI) -> Iterator[TestClient]:
+    """Test client with lifespan events executed."""
+    with TestClient(app) as test_client:
+        yield test_client
