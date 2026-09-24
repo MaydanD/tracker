@@ -11,7 +11,7 @@ from app.db.migrations import applied_revision, expected_revision, schema_status
 from tests.helpers import (
     STAGE_1_REVISION,
     STAGE_2_REVISION,
-    STAGE_3_REVISION,
+    STAGE_5_REVISION,
     alembic_config,
     run_migrations,
     table_names,
@@ -73,7 +73,7 @@ class TestFreshDatabase:
     def test_upgrade_records_the_head_revision(self, settings: Settings) -> None:
         run_migrations(_prepare(settings))
 
-        assert _recorded_revision(settings.resolved_database_url) == STAGE_3_REVISION
+        assert _recorded_revision(settings.resolved_database_url) == STAGE_5_REVISION
 
     def test_stage_two_schema_has_its_constraints_and_index(
         self, settings: Settings
@@ -148,7 +148,7 @@ class TestUpgradeFromStageOne:
         run_migrations(database_url)
         assert STAGE_2_TABLES <= set(table_names(database_url))
         assert STAGE_3_TABLES <= set(table_names(database_url))
-        assert _recorded_revision(database_url) == STAGE_3_REVISION
+        assert _recorded_revision(database_url) == STAGE_5_REVISION
 
     def test_stage_one_data_survives_the_upgrade(self, settings: Settings) -> None:
         """The Stage 1 marker row must still be there after migrating."""
@@ -218,7 +218,7 @@ class TestUpgradeFromStageTwo:
         run_migrations(database_url)
 
         assert STAGE_3_TABLES <= set(table_names(database_url))
-        assert _recorded_revision(database_url) == STAGE_3_REVISION
+        assert _recorded_revision(database_url) == STAGE_5_REVISION
 
     def test_stage_two_data_survives_the_upgrade(self, settings: Settings) -> None:
         database_url = self._stage_two_database(settings)
@@ -328,12 +328,12 @@ class TestSchemaStatus:
             unmigrated.dispose()
 
     def test_ok_once_migrated(self, database: Database) -> None:
-        assert applied_revision(database) == STAGE_3_REVISION
+        assert applied_revision(database) == STAGE_5_REVISION
         assert schema_status(database) == "ok"
 
-    def test_expected_revision_is_the_stage_three_revision(self) -> None:
+    def test_expected_revision_is_the_stage_five_revision(self) -> None:
         """The code's expected head must match the newest migration on disk."""
-        assert expected_revision() == STAGE_3_REVISION
+        assert expected_revision() == STAGE_5_REVISION
 
     def test_pending_for_a_database_left_at_stage_two(self, settings: Settings) -> None:
         database_url = _prepare(settings)

@@ -47,6 +47,7 @@ def test_factory_returns_independent_applications(tmp_path: Path) -> None:
 
 
 EXPECTED_PATHS = {
+    "/api/days/{state_date}/state",
     "/api/progress/days/{on}",
     "/api/progress/weeks/{on}",
     "/api/habits/{habit_id}/progress",
@@ -93,7 +94,7 @@ def test_habits_and_areas_cannot_be_hard_deleted(client: TestClient) -> None:
         if method.lower() == "delete"
     }
 
-    assert delete_operations == {"DELETE /api/habits/{habit_id}/entries/{entry_date}"}
+    assert delete_operations == {"DELETE /api/habits/{habit_id}/entries/{entry_date}", "DELETE /api/days/{state_date}/state"}
 
 
 def test_interactive_docs_are_available(client: TestClient) -> None:

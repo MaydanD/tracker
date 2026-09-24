@@ -22,8 +22,8 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   {
     path: '/check-in',
     label: 'Итоги дня',
-    summary: 'Отметки по дням: выполнено, пропущено, осознанный пропуск, количество и заметки.',
-    plannedIn: 'Этап 3',
+    summary: 'Отметки привычек, оценки и серии, настроение, энергия, сон и заметка дня.',
+    plannedIn: 'Этап 5',
   },
   {
     path: '/calendar',

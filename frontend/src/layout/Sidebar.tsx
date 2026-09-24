@@ -36,7 +36,7 @@ export function Sidebar() {
       </nav>
 
       <footer className="sidebar__footer">
-        <p>Этапы 1–3 — Основа, привычки и отметки</p>
+        <p>Этапы 1–5 — Привычки и состояние дня</p>
         <p>Для вас · данные на компьютере</p>
       </footer>
     </aside>

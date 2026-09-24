@@ -86,6 +86,9 @@ export function describeApiError(error: unknown): string {
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
+  invalid_daily_state: 'Проверьте состояние дня: оценки от 1 до 5, время от 0 до 24 часов; уточнения алкоголя и игр должны соответствовать выбранному ответу.',
+  empty_daily_state: 'Укажите хотя бы одно значение. Для удаления записи нажмите «Очистить состояние».',
+  future_daily_state: 'Состояние будущего дня нельзя заполнять.',
   area_not_found: 'Сфера не найдена. Обновите страницу.',
   area_name_conflict: 'Активная сфера с таким названием уже существует.',
   area_has_active_habits: 'В этой сфере есть активные привычки. Сначала перенесите их в другую сферу или в архив.',
@@ -124,6 +127,10 @@ const ERROR_MESSAGES: Record<string, string> = {
 }
 
 const FIELD_LABELS: Record<string, string> = {
+  mood: 'Настроение', energy: 'Энергия', wellbeing: 'Самочувствие',
+  sleep_status: 'Сон', sleep_minutes: 'Длительность сна', alcohol: 'Алкоголь',
+  alcohol_detail: 'Уточнение алкоголя', gaming: 'Игры', gaming_minutes: 'Время в играх',
+  computer_overuse: 'Слишком много времени за компьютером', computer_minutes: 'Время за компьютером', state_date: 'Дата',
   name: 'Название', description: 'Описание', color: 'Цвет', area_id: 'Сфера',
   weight: 'Важность', tracking_mode: 'Способ учёта', quantity_unit: 'Единица измерения',
   quantity_allows_decimal: 'Дробные значения', schedule: 'Расписание',

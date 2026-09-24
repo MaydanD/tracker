@@ -379,6 +379,9 @@ export function createFakeApi(options: FakeApiOptions = {}): FakeApi {
       if (rawId === undefined) {
         return notFound('not_found', 'A day request needs a date.')
       }
+      if (action === 'state') {
+        return jsonResponse({ state_date: rawId, today: localTodayIso(), state: null })
+      }
       return readDay(rawId)
     }
     if (resource === 'areas') {

@@ -19,6 +19,7 @@ ALEMBIC_INI = BACKEND_DIR / "alembic.ini"
 STAGE_1_REVISION = "0001"
 STAGE_2_REVISION = "8c12a1c62d83"
 STAGE_3_REVISION = "fc1efb50fa8d"
+STAGE_5_REVISION = "d5a1c09e2401"
 
 
 @dataclass(frozen=True)

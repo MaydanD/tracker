@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { fetchDay } from '../api/daily'
 import { fetchProgress } from '../api/progress'
 import { ProgressSummary } from '../components/daily/ProgressSummary'
+import { DailyStatePanel } from '../components/daily/DailyStatePanel'
 import { EmptyState, ErrorBanner, InfoBanner, LoadingText } from '../components/Feedback'
 import { DayNavigator } from '../components/daily/DayNavigator'
 import { HabitDayList } from '../components/daily/HabitDayList'
@@ -53,7 +54,7 @@ export function CheckInPage() {
     <section className="page">
       <header className="page__header">
         <h1 className="page__title">Итоги дня</h1>
-        <span className="badge">Этап 4</span>
+        <span className="badge">Этап 5</span>
       </header>
       <p className="page__summary">
         Отметьте состояние каждой привычки за выбранный день. Запись можно
@@ -79,6 +80,7 @@ export function CheckInPage() {
       <ErrorBanner message={derived.error} />
       {derived.error ? <button className="button" onClick={derived.reload}>Повторить расчёт</button> : null}
       {progress ? <ProgressSummary progress={progress} /> : null}
+      <DailyStatePanel date={entryDate} />
 
       {day === null ? (
         <LoadingText>Загрузка отметок за {formatDayLabel(entryDate)}…</LoadingText>

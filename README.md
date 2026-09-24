@@ -15,9 +15,9 @@ source of truth for what Tracker will become.
 **UI language: Russian.** All user-facing text, including errors and schedule labels,
 is Russian (PROJECT-SPEC.md §2.1); API fields and codes remain English.
 
-**Current stage: Stage 4 — Schedule + Streak + Score.** Areas, habits,
+**Current stage: Stage 5 — Daily State.** Areas, habits,
 day-by-day recording, automatic SQLite backup and derived daily/weekly scores,
-quota progress and streaks are implemented. See
+quota progress, streaks and independent daily state collection are implemented. See
 [Known limitations](#known-limitations).
 
 ---
@@ -40,6 +40,8 @@ quota progress and streaks are implemented. See
   written with SQLite's own backup API so WAL mode cannot make it incomplete.
 - **Schedule, score and streaks**: calendar Mon–Sun quotas, same-week transfers,
   weighted daily/weekly score and current day/week streaks on «Итоги дня».
+- **Daily State**: optional mood, energy, wellbeing, sleep, alcohol, gaming,
+  computer time and a separate day note, with explicit unspecified/no/yes choices.
 - React + TypeScript + Vite shell with working Итоги дня, Habits and Areas
   screens, sidebar navigation for all planned screens, and an always-visible
   backend/health indicator.
@@ -218,11 +220,17 @@ Migration scripts live in `backend/alembic/versions/`:
 | `0001` | Internal `app_metadata` table (Stage 1) |
 | `8c12a1c62d83` | `areas`, `habits`, `habit_versions` (Stage 2) |
 | `fc1efb50fa8d` | `daily_habit_entries` (Stage 3) |
+| `d5a1c09e2401` | Independent `daily_states` (Stage 5; Stage 4 had no migration) |
 
 Upgrading an existing database is just `alembic upgrade head`; each stage adds its
 own tables and touches no existing data. The Stage 3 migration only creates
 `daily_habit_entries`, so a Stage 2 database keeps every area, habit and version
 exactly as it was.
+
+The Stage 5 migration adds only `daily_states`. Upgrade from Stage 4 and downgrade
+back to `fc1efb50fa8d` preserve all areas, habits, versions and entries. Downgrade
+removes the Daily State table and its observations. Tests compare the migrated
+CHECK expressions with ORM constraints as well as running `alembic check`.
 
 Keep `alembic check` passing: it fails when models and migrations disagree.
 
@@ -521,7 +529,7 @@ Changing the system timezone can change the local date of a UTC archive boundary
 current streaks and preferred-day explanations. Changing or clearing an entry
 refreshes them; late responses cannot show another date's score. The selected
 date controls day/week progress; streaks explicitly show their current as-of date.
-There is no new dashboard, calendar, heatmap or state tracking. Full boundary
+Stage 4 added no new dashboard, calendar, heatmap or state tracking. Full boundary
 semantics are specified in [PROJECT-SPEC.md §10.4](PROJECT-SPEC.md#104-реализовано-stage-4--schedule--streak--score).
 
 Stage 4 regression tests cover domain rules, database/API history and read
@@ -529,6 +537,60 @@ purity, calendar/creation/configuration/archive boundaries, quantity-independent
 completion, score caps, current-period grace, Russian UI, off-preferred-day
 recording, clearing, retries and late responses. Contract fixtures in frontend
 tests do not reimplement the scoring engine.
+
+### Daily State (Stage 5)
+
+Daily State observes a **calendar date**, separately from habits. One unique
+`state_date` has at most one row in `daily_states`, with no habit foreign key.
+All observation fields are nullable; no defaults manufacture answers:
+
+- `mood`, `energy`, `wellbeing`: integer **1–5**, or `null` (unspecified).
+- `sleep_status`: `underslept`, `normal`, `overslept`, or `null`.
+  `sleep_minutes`: optional integer **0–1440**, independent of the category.
+- `alcohol`, `gaming`, `computer_overuse`: **null / false / true** mean
+  unspecified / explicitly no / explicitly yes. An unfilled day is never
+  interpreted as sober or without gaming/computer use.
+- `alcohol_detail`: trimmed optional text, at most 200 characters, allowed only
+  with `alcohol=true`. A nonblank detail with false/null is rejected (422).
+- `gaming_minutes`: optional integer **0–1440**. Null gaming requires null
+  minutes; false gaming permits null or zero, and rejects positive minutes.
+- `computer_minutes`: optional integer **0–1440**, independent of the subjective
+  overuse flag. 180 minutes with false/null is valid; no threshold derives a flag.
+- `note`: separate day note, trimmed, at most 500 characters. It never replaces
+  habit notes, skip reasons or alcohol details. Blank text normalizes to null.
+
+Partial records (even just `false`, zero minutes or a note) are valid. Completely
+empty records are rejected after normalization; clearing the day uses DELETE.
+Numeric and boolean inputs are strict: strings, fractional minutes and numbers
+in place of booleans are rejected. Database CHECKs backstop ranges, enum values,
+cross-field consistency and nonempty records.
+
+| Endpoint | Result |
+| --- | --- |
+| `GET /api/days/{YYYY-MM-DD}/state` | `{state_date, today, state}`; absent state is `null`, including a future date |
+| `PUT /api/days/{YYYY-MM-DD}/state` | Full replacement/upsert, returns the record; omitted fields become null |
+| `DELETE /api/days/{YYYY-MM-DD}/state` | Idempotent removal, 204; subsequent GET returns `state: null` |
+
+Today and all past dates are editable, including dates before the first habit.
+Future PUT/DELETE are rejected with `422 future_daily_state`, using the existing
+injected Clock. GET remains allowed. UTC creation/update timestamps are metadata,
+not the observation date. SQLite `ON CONFLICT DO UPDATE` makes concurrent first
+saves atomic and preserves the row id and creation timestamp.
+
+«Итоги дня» has a compact Russian «Состояние дня» block, segmented scales and
+tri-state choices, hours/minutes inputs, conditional alcohol/gaming details,
+save and clear actions. Unspecified is visually distinct from no. The server's
+today controls future disabling. Date-keyed resource/form lifetimes protect
+drafts against delayed GET/PUT/DELETE responses. Saving only updates this block.
+
+Daily State **does not change obligations, scores, weights, schedules, streaks
+or habit entries**. Regression tests compare full day/week/streak responses and
+manual entries before and after saving, editing and deleting state. Future habit
+planned skips remain allowed. Domain/API/DB tests also cover every field boundary,
+tri-state persistence, concurrent saves, migration preservation and UI races.
+
+Stage 5 ends at collection: no correlations, averages, charts, predictions,
+recommendations, experiments, achievements, reminders, notifications, auth or sync.
 
 ### Backups
 
@@ -617,7 +679,7 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
   `archived_at`; restore clears it. Stage 4 uses this boundary as documented above.
 - **Full partial-week quota.** Creation or schedule change midweek does not
   prorate a weekly quota; the UI shows the required count explicitly.
-- Still absent: mood/energy/well-being/sleep/factors, dashboard content,
+- Still absent: dashboard content,
   calendar and heatmaps, analytics, insights, the owl, experiments, records,
   Excel export, restore and the Windows executable.
 - **Backups are minimal on purpose.** One automatic copy per day in
@@ -634,6 +696,5 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
 
 ## Next stage
 
-**Stage 5 — Daily State:** mood, energy, well-being, sleep categories, daily
-factors and note. These are not implemented in Stage 4 and will never change the
-habit-score formula. Dashboard/calendar and analytics remain later stages.
+Stage 5 daily collection is complete. Dashboard/calendar and analytics remain
+later stages; no Stage 6 work is included in this implementation.

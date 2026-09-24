@@ -397,13 +397,13 @@ State tracking is separate from habits.
 
 ### 9.1 Mood
 
-Five fixed levels with emoji and text:
+Five numeric levels, displayed with Russian labels (emoji are optional):
 
-1. 😫 Terrible
-2. 😕 Bad
-3. 😐 Normal
-4. 🙂 Good
-5. 😄 Great
+1. Очень плохое
+2. Плохое
+3. Нормальное
+4. Хорошее
+5. Отличное
 
 Store the numeric level for analytics.
 
@@ -425,7 +425,8 @@ Use:
 - normal;
 - overslept.
 
-The model should permit future extension.
+Optional exact duration is stored in integer minutes (0–1440), independently
+of the subjective category. Neither field requires the other.
 
 ### 9.5 Daily factors
 
@@ -437,7 +438,7 @@ Initial factors:
 
 Each factor should support:
 
-- simple yes/no;
+- explicit unspecified/no/yes (nullable boolean, never false by default);
 - optional structured clarification where useful;
 - optional note.
 
@@ -448,6 +449,73 @@ The model must allow future factors without a major redesign.
 ### 9.6 Daily note
 
 Each date may have one general free-text note.
+
+### 9.7 Реализовано: Stage 5 — Daily State
+
+Состояние дня — отдельная сущность `daily_states`, без связи с Habit.
+`UNIQUE(state_date)` обеспечивает максимум одну запись на календарную дату.
+Таблица содержит `id`, `state_date`, nullable-поля наблюдений и UTC-метки
+`created_at`/`updated_at`. Числа шкал хранятся числами, подписи — только в UI.
+
+| Поле | Семантика |
+| --- | --- |
+| `mood`, `energy`, `wellbeing` | Целые 1–5; `null` — не указано |
+| `sleep_status` | `underslept` / `normal` / `overslept` / `null` |
+| `sleep_minutes` | Целые 0–1440 или `null`, независимо от категории сна |
+| `alcohol` | `null` — не указано; `false` — не было; `true` — был |
+| `alcohol_detail` | Необязательный текст до 200 символов только при `alcohol=true` |
+| `gaming` | Nullable boolean с теми же тремя различными состояниями |
+| `gaming_minutes` | Целые 0–1440; при `gaming=null` только NULL, при false — NULL или 0 |
+| `computer_overuse` | Nullable boolean: субъективная оценка чрезмерного времени за компьютером |
+| `computer_minutes` | Целые 0–1440 или NULL, независимо от `computer_overuse` |
+| `note` | Отдельная заметка дня до 500 символов |
+
+Для алкоголя непустое уточнение при false/null отклоняется (422), а не
+сохраняется и не теряется молча. Для игр false с положительными минутами и null
+с любыми минутами отклоняются. Время за компьютером не выводит флаг автоматически:
+180 минут и false/null валидны. Длительности в UI вводятся часами и минутами,
+API/БД используют только целые минуты. Строки вместо чисел, дробные минуты,
+boolean вместо числовой шкалы и 0/1 вместо boolean API не принимает.
+
+Текст обрезается по краям, пробельный текст становится NULL. Заметка дня,
+заметка Habit entry, skip reason и alcohol detail не смешиваются.
+Частичное состояние допустимо: одно настроение, только note, явное «Нет»
+или нулевые минуты. После нормализации хотя бы одно поле должно отличаться
+от NULL; полностью пустой PUT отклоняется. NULL никогда не заменяется false
+или нулём при чтении, записи или отображении.
+
+API: GET/PUT/DELETE `/api/days/{date}/state`. GET возвращает
+`{state_date, today, state}`, без записи — `state: null`. PUT полностью заменяет
+значения (пропущенные поля очищаются), возвращает запись и атомарно выполняет
+SQLite upsert с сохранением id/created_at, включая concurrent insert.
+DELETE идемпотентно удаляет запись (204); GET после удаления снова возвращает null.
+
+Сегодня и прошлое полностью редактируются, без ограничений глубины истории
+или даты появления Habit. Будущие PUT/DELETE запрещены backend через injected
+Clock; будущий GET разрешён. UI использует серверное today и показывает
+«Состояние будущего дня нельзя заполнять». Будущий planned skip Habit сохраняет
+свои правила Stage 3 и продолжает работать.
+
+«Состояние дня» встроено в «Итоги дня», весь интерфейс русский. Шкалы и tri-state
+представлены компактными кнопками; «Не указано» отличается от «Нет». Уточнение
+алкоголя и время игр раскрываются при «Да». Сохранение, редактирование и очистка
+обновляют только этот блок. Смена даты создаёт отдельный ресурс и черновик,
+поэтому запоздалые GET/PUT/DELETE не заменяют данные под другой датой.
+
+Daily State не создаёт и не меняет `daily_habit_entries`, не превращает no-entry
+в missed, не меняет done/missed/skipped и не участвует в obligations, required/
+completed weight, daily/weekly score, schedule или streak. Формула Stage 4
+не изменена; регрессия сравнивает результаты до/после создания, правки и удаления.
+
+Миграция `d5a1c09e2401` поверх `fc1efb50fa8d` (Stage 4 не менял схему) создаёт
+только новую таблицу. CHECK защищают шкалы, целые минуты, enum, boolean,
+согласованность уточнений и непустоту; ORM и миграция совпадают. Upgrade и
+downgrade проверяются с сохранением существующих Habit/Entry данных.
+
+Граница Stage 5 — **сбор Daily State**. Аналитика, корреляции, средние,
+графики, lag analysis, прогнозы, рекомендации, автоматические выводы,
+эксперименты, достижения, уведомления, напоминания, cloud sync и auth/multi-user
+на этом этапе не реализуются. Stage 6 не начат.
 
 ---
 

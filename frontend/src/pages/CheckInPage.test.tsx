@@ -499,6 +499,7 @@ describe('CheckInPage', () => {
 
   it('shows the server’s rejection in Russian', async () => {
     stubApi({
+      [`GET /api/days/${TODAY}/state`]: () => jsonResponse({ state_date: TODAY, today: TODAY, state: null }),
       [`GET /api/progress/days/${TODAY}`]: () => jsonResponse(progressFixture(TODAY)),
       [`GET /api/days/${TODAY}`]: () =>
         jsonResponse({
