@@ -46,7 +46,7 @@ export class ApiConnectionError extends Error {
   }
 }
 
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH'
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 export interface RequestOptions {
   method?: HttpMethod
@@ -101,6 +101,16 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_schedule: 'Проверьте расписание: выберите дни недели или число выполнений от 1 до 7.',
   invalid_configuration_date: 'Изменение не может вступить в силу раньше текущей версии настроек.',
   invalid_configuration: 'Проверьте настройки привычки.',
+  daily_entry_not_found: 'На эту дату отметки нет.',
+  invalid_entry_status: 'Неизвестное состояние отметки. Обновите страницу.',
+  future_entry_not_allowed: 'На будущую дату можно только запланировать пропуск.',
+  skip_reason_required: 'Укажите причину пропуска.',
+  skip_reason_not_allowed: 'Причину пропуска можно указать только для осознанного пропуска.',
+  invalid_skip_reason: 'Причина пропуска слишком длинная (не более 200 символов).',
+  invalid_note: 'Заметка слишком длинная (не более 500 символов).',
+  invalid_quantity: 'Проверьте количество: число не может быть отрицательным, слишком большим или иметь слишком много знаков после запятой.',
+  quantity_not_allowed: 'У этой привычки количество не ведётся.',
+  quantity_decimal_not_allowed: 'Для этой привычки допустимы только целые значения.',
   validation_error: 'Проверьте заполненные поля.',
   database_unavailable: 'База данных недоступна. Попробуйте ещё раз.',
   service_unavailable: 'Сервис временно недоступен. Попробуйте ещё раз.',
@@ -119,6 +129,8 @@ const FIELD_LABELS: Record<string, string> = {
   quantity_allows_decimal: 'Дробные значения', schedule: 'Расписание',
   type: 'Тип расписания', weekdays: 'Дни недели', times_per_week: 'Выполнений в неделю',
   on: 'Дата', include_archived: 'Показывать архивные',
+  status: 'Состояние', quantity_value: 'Количество', skip_reason: 'Причина пропуска',
+  note: 'Заметка', entry_date: 'Дата',
 }
 
 function fieldMessages(error: ApiError): string[] {

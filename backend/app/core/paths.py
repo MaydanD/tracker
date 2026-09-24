@@ -22,6 +22,7 @@ import sys
 from pathlib import Path
 
 DATABASE_FILENAME = "tracker.db"
+BACKUPS_DIRECTORY_NAME = "backups"
 APP_DIRECTORY_NAME = "Tracker"
 
 
@@ -73,6 +74,16 @@ def ensure_data_dir(path: Path) -> Path:
 def database_file(data_dir: Path) -> Path:
     """Absolute path of the SQLite database file inside ``data_dir``."""
     return Path(data_dir) / DATABASE_FILENAME
+
+
+def backups_dir(data_dir: Path) -> Path:
+    """Directory holding automatic backups, kept separate from the database.
+
+    Mixing backups into the same folder as ``tracker.db`` would invite treating
+    them as one dataset; a dedicated subdirectory also means a future export or
+    packaging step has an obvious place to look.
+    """
+    return Path(data_dir) / BACKUPS_DIRECTORY_NAME
 
 
 def sqlite_url_for_path(path: Path) -> str:

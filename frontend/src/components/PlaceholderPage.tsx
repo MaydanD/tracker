@@ -28,7 +28,8 @@ export function PlaceholderPage({
       <div className="placeholder">
         <p className="placeholder__title">Раздел пока в разработке</p>
         <p className="placeholder__text">
-          Сейчас доступны сферы и настройка привычек. Этот раздел появится позже: {plannedIn}.
+          Сейчас доступны сферы, настройка привычек и отметки по дням. Этот раздел
+          появится позже: {plannedIn}.
         </p>
       </div>
     </section>

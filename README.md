@@ -15,9 +15,10 @@ source of truth for what Tracker will become.
 **UI language: Russian.** All user-facing text, including errors and schedule labels,
 is Russian (PROJECT-SPEC.md §2.1); API fields and codes remain English.
 
-**Current stage: Stage 2 — Areas & Habits.** Areas and habits can be managed;
-recording daily completions is Stage 3. See
-[Known Stage 2 limitations](#known-stage-2-limitations).
+**Current stage: Stage 3 — Daily Tracking + Early Backup.** Areas, habits and
+day-by-day recording are in place, and the database is backed up automatically
+once a day. Streaks, scores and schedule evaluation are Stage 4. See
+[Known limitations](#known-limitations).
 
 ---
 
@@ -31,9 +32,15 @@ recording daily completions is Stage 3. See
 - **Habits**: create and edit the full configuration — area, weight, tracking
   mode, quantity unit, schedule — plus archive/restore and a queryable
   configuration history.
-- React + TypeScript + Vite shell with working Habits and Areas screens, sidebar
-  navigation for all planned screens, and an always-visible backend/health
-  indicator.
+- **Daily tracking** («Итоги дня»): pick any date, past or future, and record each
+  habit as `done`, `missed` or a deliberate `skipped` with a separate reason, an
+  optional exact quantity and an optional note. Records stay editable, and can be
+  cleared back to «no entry».
+- **Automatic SQLite backup**: one consistent, timestamped copy per calendar day,
+  written with SQLite's own backup API so WAL mode cannot make it incomplete.
+- React + TypeScript + Vite shell with working Итоги дня, Habits and Areas
+  screens, sidebar navigation for all planned screens, and an always-visible
+  backend/health indicator.
 - Backend tests (pytest) and frontend tests (Vitest) that never touch your real
   database, plus a TypeScript-checked production build.
 
@@ -54,11 +61,11 @@ tracker/
 │   │   ├── main.py              Application factory (create_app)
 │   │   ├── __main__.py          `python -m app` dev server entry point
 │   │   ├── api/
-│   │   │   ├── dependencies.py  FastAPI dependency providers
+│   │   │   ├── dependencies.py  FastAPI dependency providers (session, clock)
 │   │   │   ├── router.py        Aggregate API router
 │   │   │   └── routes/          One module per endpoint group
-│   │   ├── core/                config, paths, logging, errors, time
-│   │   ├── db/                  engine/session lifecycle, base, ORM models
+│   │   ├── core/                config, paths, logging, errors, time/clock
+│   │   ├── db/                  engine/session lifecycle, backup, ORM models
 │   │   ├── domain/              Pure product rules (no DB, no HTTP)
 │   │   ├── schemas/             Pydantic request/response models
 │   │   └── services/            Use cases that read/write through a session
@@ -68,7 +75,7 @@ tracker/
 ├── frontend/                    React UI
 │   ├── src/
 │   │   ├── api/                 Typed API client (the only place using fetch)
-│   │   ├── components/          Reusable UI pieces (areas/, habits/, shared)
+│   │   ├── components/          Reusable UI pieces (areas/, habits/, daily/)
 │   │   ├── hooks/               React hooks (backend status, areas, habits)
 │   │   ├── layout/              Application shell: sidebar + top bar
 │   │   ├── pages/               One file per planned screen
@@ -152,6 +159,10 @@ The SQLite database is `<data directory>\tracker.db`. It is created by
 `alembic upgrade head` (`python -m app` also creates the directory on startup).
 `.data/` is git-ignored, and no database is ever committed.
 
+Automatic backups go to `<data directory>\backups`, as
+tracker-<date>-<time>.db`. They are separate from the live database on purpose,
+and there is one per calendar day at most.
+
 Logs go to stdout only; there is no log file yet.
 
 ---
@@ -204,9 +215,12 @@ Migration scripts live in `backend/alembic/versions/`:
 | --- | --- |
 | `0001` | Internal `app_metadata` table (Stage 1) |
 | `8c12a1c62d83` | `areas`, `habits`, `habit_versions` (Stage 2) |
+| `fc1efb50fa8d` | `daily_habit_entries` (Stage 3) |
 
-Upgrading an existing Stage 1 database is just `alembic upgrade head`; the Stage
-2 migration adds its tables without touching existing data.
+Upgrading an existing database is just `alembic upgrade head`; each stage adds its
+own tables and touches no existing data. The Stage 3 migration only creates
+`daily_habit_entries`, so a Stage 2 database keeps every area, habit and version
+exactly as it was.
 
 Keep `alembic check` passing: it fails when models and migrations disagree.
 
@@ -249,12 +263,24 @@ downgrade/upgrade round trip;
 - area and habit endpoints end to end, including archive rules, area filtering,
   and the SQLite `CHECK` constraints that backstop the domain;
 - configuration history: same-day and later edits, preserved old versions, and
-  date-based configuration lookup.
+  date-based configuration lookup;
+- daily entries: «no entry» as a distinct state, recording today and past days,
+  the future-date rules, skip reasons, notes, quantities (including exact
+  read-write-read round trips), idempotent re-saves — including two save requests
+  that interleave, which must still leave one row — deletion, historical
+  configuration lookup, day-view scope and archived-habit history;
+- automatic backups: the file is produced, is a valid SQLite database, contains
+  data that only the WAL file holds yet, is written once per day, is taken before
+  a pending migration, is skipped for in-memory and test databases, never
+  overwrites an existing file, leaves nothing behind when the copy fails, and
+  logs failures rather than swallowing them.
 
-The frontend suite covers the API client (including write requests and error
-envelopes) and the real user paths on the Habits and Areas screens: create,
-edit, filter, archive/restore, validation messages, history and backend-failure
-states.
+The frontend suite covers the API client (including write and delete requests and
+error envelopes) and the real user paths on the Итоги дня, Habits and Areas
+screens: create, edit, filter, archive/restore, validation messages, history and
+backend-failure states. The daily screen is checked for Russian wording, the
+«нет отметки» / «пропущено» distinction, quantity and unit display, skip reasons,
+notes, past-day editing, the future planned-skip rules and clearing a record.
 
 ---
 
@@ -291,8 +317,18 @@ states.
 | `GET /api/habits/{habit_id}/versions` | Configuration history, newest first |
 | `GET /api/habits/{habit_id}/configuration?on=YYYY-MM-DD` | The configuration effective on a date |
 
-There are deliberately no delete endpoints: habits and areas are archived, so
-historical records keep resolving.
+### Daily tracking (Stage 3)
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/days/{YYYY-MM-DD}` | The whole day: every habit that existed then, its configuration *on that date*, and its record (or `null`) |
+| `GET /api/habits/{habit_id}/entries/{YYYY-MM-DD}` | One record (404 when the day holds nothing) |
+| `PUT /api/habits/{habit_id}/entries/{YYYY-MM-DD}` | Create or replace that record (idempotent) |
+| `DELETE /api/habits/{habit_id}/entries/{YYYY-MM-DD}` | Clear that record, returning the day to «no entry» |
+
+There are deliberately no delete endpoints for habits or areas: they are archived,
+so historical records keep resolving. The only delete in the API removes a daily
+*entry* — the user's own note about a day.
 
 Readiness reports *state* rather than raising, so the frontend can show "database
 unavailable" without parsing an error body. Every other failing response uses one
@@ -371,15 +407,96 @@ recorded it:
 Effective dates are calendar dates in the machine's local timezone (Tracker runs
 on the user's own machine), while `created_at`/`updated_at` timestamps stay UTC.
 
-### Editing and archiving in the UI
+### Daily tracking (Stage 3)
 
-`Привычки` and `Сферы` are working screens. Habits can be filtered by area and
-include archived items on request; archiving hides an item from the default list
-while keeping its history; the «История» action on a habit shows every
-configuration version with the date it became effective. Form validation
-prevents contradictory configurations client-side, and the server remains the
-authority — its `422`/`409` codes are translated into Russian messages and shown on the form without discarding
-typed input.
+«Итоги дня» records what happened for each habit on one calendar date. Open any
+past or future date, state the outcome per habit, and change it later.
+
+**«Нет отметки» and «Пропущено» are different states.** A missing record means the
+user has said nothing about that habit on that day. `missed` exists only when the
+user states it. Tracker never derives a miss from silence — not for yesterday and
+not for last year — and clearing a record returns the day to «нет отметки» rather
+than to `missed`. Automatic evaluation belongs to Stage 4 and must not be written
+back into the records.
+
+| Status | Meaning | Allowed on |
+| --- | --- | --- |
+| `done` | Performed | today, past |
+| `missed` | The user states it was not performed | today, past |
+| `skipped` | A deliberate/planned skip | past, today, **future** |
+
+A future date accepts a planned skip and nothing else, and the backend enforces
+that on its own: the screen simply does not offer `done`/`missed` for a day that
+has not happened, because offering an action that would be refused is worse than
+not offering it. «Сегодня», «Вчера» and «Завтра» come from the server's date, so
+the screen and the API always agree on which rules apply.
+
+**One habit and one date hold at most one record.** Saving is a `PUT`: the record
+is replaced, never duplicated, so saving the same day twice (or re-saving after a
+mistake) leaves exactly one row. `habit_id + entry_date` is unique in the database.
+
+**Skip reason and note are separate fields.** A `skipped` record requires a reason
+(travel, illness, holiday, a deliberate rest day, or free text); `done`/`missed`
+may not carry one, so a reason can never drift into a different meaning. The note
+is optional for any status.
+
+**Quantity is optional and structured.** It only exists for `binary_quantity`
+habits, and it is validated against the configuration that was effective **on the
+recorded date** — the unit and decimal rule of that day, not of today:
+
+- a `binary` habit rejects a quantity outright;
+- the unit comes from the historical version and is shown with the value;
+- if the historical version forbids decimals, a fraction is rejected;
+- if it allows them, up to six decimal places are accepted, and a value with
+  more precision is rejected rather than silently rounded.
+
+Quantities are stored as an exact integer number of millionths
+(`quantity_value_micro`), not as `REAL`/`NUMERIC` (SQLite's numeric affinity is
+binary floating point, which turns 6.4 into 6.4000000000000004) and not as text.
+The API renders the field as a JSON number, because JSON has no decimal type.
+
+Six places is a deliberate bound rather than an implementation detail: it is far
+beyond what any hand-recorded unit needs (a gram of a body weight in kg, a metre
+of a distance in km), the value is non-negative and capped at 1 000 000, and the
+scaled integer therefore stays well inside a signed 64-bit column.
+
+### Backups
+
+Starting the application writes a safety copy of the database, at most once per
+calendar day, into `<data dir>/backups` as `tracker-<date>-<time>.db`.
+
+The copy is made with SQLite's own online backup API rather than `shutil.copy`.
+The database runs in WAL mode, which keeps recent committed data in
+`tracker.db-wal` until a checkpoint: copying only `tracker.db` can therefore miss
+the newest records or capture a torn page. Going through a SQLite connection
+takes a consistent snapshot instead, including committed WAL content, while the
+application holds the file open.
+
+It is deliberately minimal: no scheduler, no cloud, no restore UI. A small
+retention window keeps the most recent automatic backups and never touches files
+it did not create. In-memory databases, the `test` environment and a database that
+does not exist yet are skipped, so a test run cannot litter real files.
+
+An existing file is never written over: the name is claimed exclusively, so two
+starts in the same second cannot interleave into one file. A copy that fails
+removes the file it had started, because a truncated file with a valid-looking
+name would both look like a real backup and stop the next start from retrying.
+Either way the failure is logged with its traceback and never stops startup.
+
+### Editing, archiving and the UI
+
+`Итоги дня`, `Привычки` and `Сферы` are working screens. Habits can be filtered by
+area and include archived items on request; archiving hides an item from the
+default list while keeping its history; the «История» action on a habit shows every
+configuration version with the date it became effective. Form validation prevents
+contradictory configurations client-side, and the server remains the authority —
+its `422`/`409` codes are translated into Russian messages and shown on the form
+without discarding typed input.
+
+**Archiving never hides recorded days.** A habit with a record on the chosen date
+still appears on «Итоги дня» (marked «В архиве») and that record stays editable and
+clearable. A habit that was archived before anything was recorded simply does not
+appear. No entry is ever deleted or rewritten because a habit was archived.
 
 ---
 
@@ -406,10 +523,14 @@ typed input.
 - **`HashRouter`** in the frontend so the future pywebview/PyInstaller build can
   load the SPA from disk without rewriting navigation.
 - **Three backend layers.** `app/domain` holds pure product rules (schedule
-  shape, weights, quantity units, the version-planning rule) with no session and
-  no FastAPI; `app/services` runs use cases against a session; `app/api` is HTTP
-  wiring only. The rules that are expensive to get wrong are unit tested without
-  a database.
+  shape, weights, quantity units, the version-planning rule, the daily-entry rules)
+  with no session and no FastAPI; `app/services` runs use cases against a session;
+  `app/api` is HTTP wiring only. The rules that are expensive to get wrong are
+  unit tested without a database.
+- **One clock for every calendar rule.** "Today" comes from an injectable
+  `Clock` (`app.state.clock`), never from a scattered `date.today()`, so the
+  future-date rules are testable and the API and the screen cannot disagree about
+  which rules apply.
 - **Structural rules exist twice on purpose:** in the domain *and* as SQLite
   `CHECK` constraints, so no code path can persist an invalid configuration
   (weight outside 1–3, a quantity unit on a binary habit, a schedule whose shape
@@ -420,20 +541,22 @@ typed input.
 
 ---
 
-## Known Stage 2 limitations
+## Known limitations
 
-- **No daily tracking yet.** Recording completions, quantities per day, notes,
-  skips with reason, historical day editing and future skips are Stage 3. A habit
-  therefore cannot be marked done anywhere in the UI.
 - **No schedule execution.** Streaks, day/week scores and flexible same-week
-  completion allocation are Stage 4; Stage 2 stores and validates the schedule
-  only.
+  completion allocation are Stage 4. The day screen shows a habit's schedule as
+  information only: every habit that existed on the date is listed, nothing is
+  assigned to a day, and nothing is ever marked `missed` automatically. An
+  unrecorded day stays «Нет отметки» for as long as the user leaves it that way.
 - Still absent: mood/energy/well-being/sleep/factors, dashboard content,
   calendar and heatmaps, analytics, insights, the owl, experiments, records,
-  backup/export and the Windows executable.
-- **No backup yet.** The Stage 3 plan includes simple automatic SQLite backups;
-  until then the database file is the only copy of your data.
+  Excel export, restore and the Windows executable.
+- **Backups are minimal on purpose.** One automatic copy per day in
+  `<data dir>/backups`, with a small retention window. There is no restore button,
+  no integrity report and no monthly snapshot yet (Stage 12).
 - Habits cannot be reordered manually, and there is no bulk edit.
+- A daily entry cannot be backdated: the habit must already have existed on the
+  date you record. Configuration changes likewise cannot be backdated.
 - Configuration changes cannot be backdated (an edit always takes effect today or
   later); the service layer already accepts an explicit effective date for when
   that becomes useful.
@@ -442,7 +565,9 @@ typed input.
 
 ## Next stage
 
-**Stage 3 — Daily Tracking + Early Backup:** daily habit entries with
-`done`/`missed`/`skipped-with-reason`, structured per-day quantities, per-habit
-notes, historical editing, future planned skips, and a simple automatic
-timestamped SQLite backup (see `PROJECT-SPEC.md`, section 27).
+**Stage 4 — Schedule / Streak / Score Engine:** Monday–Sunday week rules, flexible
+same-week completion, streaks and a weighted day/week score, all recomputable from
+the records already stored (see `PROJECT-SPEC.md`, sections 27 and 28).
+
+Stage 3 deliberately stops here: it records what the user says happened and never
+computes anything on top of it.

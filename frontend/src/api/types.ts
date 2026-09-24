@@ -119,6 +119,66 @@ export interface HabitVersion extends HabitConfig {
   created_at: string
 }
 
+// ---------------------------------------------------------------------------
+// Daily tracking
+// ---------------------------------------------------------------------------
+
+/**
+ * What the user recorded for a habit on one date.
+ *
+ * `done` and `missed` describe a day that has already happened; `skipped` is a
+ * deliberate/planned skip and is the only status a future date accepts.
+ */
+export type EntryStatus = 'done' | 'missed' | 'skipped'
+
+/** One recorded day, as returned by the API. */
+export interface DailyEntry {
+  id: number
+  habit_id: number
+  entry_date: string
+  status: EntryStatus
+  /** Exact stored value; null when no quantity was recorded. */
+  quantity_value: number | null
+  /** Unit of the configuration effective on `entry_date` (derived, not stored). */
+  quantity_unit: string | null
+  skip_reason: string | null
+  note: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Body for saving an entry. Saving is a replace: omitted fields are cleared. */
+export interface DailyEntryInput {
+  status: EntryStatus
+  quantity_value?: number | null
+  skip_reason?: string | null
+  note?: string | null
+}
+
+/** One habit as it appears on a chosen date, with that date's configuration. */
+export interface DayItem {
+  habit_id: number
+  name: string
+  area: AreaSummary
+  weight: number
+  tracking_mode: TrackingMode
+  quantity_unit: string | null
+  quantity_allows_decimal: boolean
+  schedule: ScheduleRead
+  is_archived: boolean
+  /** `null` means "нет отметки" — it is not the same as `missed`. */
+  entry: DailyEntry | null
+}
+
+/** `GET /api/days/{date}` — the state of one calendar date. */
+export interface DayState {
+  entry_date: string
+  /** The server's current date; the authority for "is this the future?". */
+  today: string
+  is_future: boolean
+  items: DayItem[]
+}
+
 /** Full configuration payload for creating or replacing a habit. */
 export interface HabitInput {
   name: string

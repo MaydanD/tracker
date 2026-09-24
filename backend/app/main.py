@@ -22,6 +22,8 @@ from app.api.router import api_router
 from app.core.config import Settings, get_settings, unknown_environment_variables
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
+from app.core.time import SYSTEM_CLOCK, Clock
+from app.db.backup import run_startup_backup
 from app.db.database import Database, create_database
 from app.db.migrations import applied_revision, expected_revision, schema_status
 
@@ -54,8 +56,12 @@ def log_schema_state(database: Database) -> None:
         logger.info("Database schema state not checked (migration files unavailable)")
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
-    """Build a fully configured FastAPI application."""
+def create_app(settings: Settings | None = None, *, clock: Clock | None = None) -> FastAPI:
+    """Build a fully configured FastAPI application.
+
+    ``clock`` supplies "today" for every calendar rule. Tests pass a frozen clock
+    instead of patching ``datetime``; production uses the machine's local date.
+    """
     settings = settings or get_settings()
     configure_logging(settings.log_level)
 
@@ -76,6 +82,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings.app_version,
         )
         logger.info("Database: %s", settings.resolved_database_path)
+        # Before anything opens the database: snapshot what was found on disk.
+        # Backs itself out for in-memory databases, test environments and a
+        # database that does not exist yet, and never raises.
+        run_startup_backup(app.state.database, settings, clock=app.state.clock)
         log_schema_state(app.state.database)
         try:
             yield
@@ -105,6 +115,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Bound on app.state before startup so dependencies resolve even when the
     # lifespan is not run (for example a route exercised directly in a test).
     app.state.settings = settings
+    app.state.clock = clock if clock is not None else SYSTEM_CLOCK
     app.state.database = create_database(settings)
 
     register_exception_handlers(app)

@@ -25,6 +25,7 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from app import __version__
 from app.core.paths import (
+    backups_dir,
     database_file,
     default_data_dir,
     ensure_data_dir,
@@ -128,6 +129,11 @@ class Settings(BaseSettings):
     def resolved_database_path(self) -> Path:
         """Absolute path of the SQLite database file."""
         return database_file(self.resolved_data_dir)
+
+    @property
+    def resolved_backups_dir(self) -> Path:
+        """Directory for automatic SQLite backups (``<data dir>/backups``)."""
+        return backups_dir(self.resolved_data_dir)
 
     @property
     def resolved_database_url(self) -> str:

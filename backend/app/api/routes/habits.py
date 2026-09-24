@@ -1,7 +1,12 @@
 """Habit endpoints.
 
-Stage 2 manages habit *configuration*. Recording habit completions for a day
-belongs to Stage 3, and schedule/streak evaluation to Stage 4.
+Stage 2 manages habit *configuration*; Stage 3 records a day's outcome through
+the daily endpoints, and schedule/streak evaluation belongs to Stage 4.
+
+Creating or editing a habit fixes the effective date of the configuration version
+from the application clock, exactly like the daily rules decide what "the future"
+is. One source of "today" means a configuration version and the entries validated
+against it can never disagree about which day it is.
 """
 
 from __future__ import annotations
@@ -11,7 +16,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.api.dependencies import DbSession
+from app.api.dependencies import ClockDep, DbSession
 from app.schemas.habits import (
     HabitCreate,
     HabitRead,
@@ -42,8 +47,12 @@ def list_habits(
 
 
 @router.post("", response_model=HabitRead, status_code=201, summary="Create a habit")
-def create_habit(payload: HabitCreate, session: DbSession) -> HabitRead:
-    habit = habit_service.create_habit(session, payload.to_domain())
+def create_habit(
+    payload: HabitCreate, session: DbSession, clock: ClockDep
+) -> HabitRead:
+    habit = habit_service.create_habit(
+        session, payload.to_domain(), effective_date=clock.today()
+    )
     return HabitRead.from_model(habit)
 
 
@@ -63,9 +72,11 @@ def get_habit(habit_id: int, session: DbSession) -> HabitRead:
     ),
 )
 def update_habit(
-    habit_id: int, payload: HabitUpdate, session: DbSession
+    habit_id: int, payload: HabitUpdate, session: DbSession, clock: ClockDep
 ) -> HabitRead:
-    habit = habit_service.update_habit(session, habit_id, payload.to_domain())
+    habit = habit_service.update_habit(
+        session, habit_id, payload.to_domain(), effective_date=clock.today()
+    )
     return HabitRead.from_model(habit)
 
 

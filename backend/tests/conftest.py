@@ -17,9 +17,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
+from app.core.time import today_local
 from app.db.database import Database, create_database
 from app.main import create_app
-from tests.helpers import run_migrations
+from tests.helpers import FrozenClock, run_migrations
 
 
 @pytest.fixture(autouse=True)
@@ -67,9 +68,20 @@ def session(database: Database) -> Iterator[Session]:
 
 
 @pytest.fixture()
-def app(migrated_settings: Settings) -> FastAPI:
-    """Application instance under test."""
-    return create_app(migrated_settings)
+def frozen_clock() -> FrozenClock:
+    """The clock the default ``app`` fixture injects.
+
+    Frozen on the machine's local date because habits are created with that as
+    their first configuration date; calendar rules can then be exercised against
+    explicit dates instead of whatever "now" happens to be.
+    """
+    return FrozenClock(today_local())
+
+
+@pytest.fixture()
+def app(migrated_settings: Settings, frozen_clock: FrozenClock) -> FastAPI:
+    """Application instance under test, with a deterministic clock."""
+    return create_app(migrated_settings, clock=frozen_clock)
 
 
 @pytest.fixture()

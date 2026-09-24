@@ -62,6 +62,9 @@ EXPECTED_PATHS = {
     "/api/habits/{habit_id}/unarchive",
     "/api/habits/{habit_id}/versions",
     "/api/habits/{habit_id}/configuration",
+    # Stage 3 — daily tracking
+    "/api/days/{entry_date}",
+    "/api/habits/{habit_id}/entries/{entry_date}",
 }
 
 
@@ -73,17 +76,21 @@ def test_openapi_documents_every_endpoint(client: TestClient) -> None:
 
 
 def test_habits_and_areas_cannot_be_hard_deleted(client: TestClient) -> None:
-    """Archiving protects history; no delete endpoints may creep in."""
+    """Archiving protects history; no delete endpoint may creep in for them.
+
+    A *daily entry* is different: it is the user's own note about a day, and
+    clearing it returns the day to 'no entry'. That is the only delete in the API.
+    """
     schema = client.get("/api/openapi.json").json()
 
-    delete_operations = [
+    delete_operations = {
         f"{method.upper()} {path}"
         for path, operations in schema["paths"].items()
         for method in operations
         if method.lower() == "delete"
-    ]
+    }
 
-    assert delete_operations == []
+    assert delete_operations == {"DELETE /api/habits/{habit_id}/entries/{entry_date}"}
 
 
 def test_interactive_docs_are_available(client: TestClient) -> None:

@@ -5,7 +5,8 @@ Alembic and the test fixtures rely on.
 """
 
 from app.db.models.areas import Area
+from app.db.models.daily import DailyHabitEntry
 from app.db.models.habits import Habit, HabitVersion
 from app.db.models.system import AppMetadata
 
-__all__ = ["AppMetadata", "Area", "Habit", "HabitVersion"]
+__all__ = ["AppMetadata", "Area", "DailyHabitEntry", "Habit", "HabitVersion"]

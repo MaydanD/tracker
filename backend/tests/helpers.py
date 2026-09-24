@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +18,28 @@ ALEMBIC_INI = BACKEND_DIR / "alembic.ini"
 
 STAGE_1_REVISION = "0001"
 STAGE_2_REVISION = "8c12a1c62d83"
+STAGE_3_REVISION = "fc1efb50fa8d"
+
+
+@dataclass(frozen=True)
+class FrozenClock:
+    """A clock stuck on one date, so calendar rules are testable.
+
+    Satisfies ``app.core.time.Clock``; injected through ``create_app(..., clock=...)``
+    instead of patching ``datetime`` anywhere in the application.
+    """
+
+    current: date
+
+    def today(self) -> date:
+        return self.current
+
+    def now(self) -> datetime:
+        # Midday keeps a frozen clock away from any midnight edge in file names.
+        return datetime.combine(self.current, time(hour=12))
+
+    def advance(self, days: int) -> FrozenClock:
+        return FrozenClock(self.current + timedelta(days=days))
 
 
 def alembic_config(database_url: str) -> Config:

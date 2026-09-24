@@ -112,3 +112,58 @@ class InvalidScheduleError(InvalidConfigurationError):
 class ConfigurationHistoryError(InvalidConfigurationError):
     code = "invalid_configuration_date"
     message = "The configuration change date is not valid."
+
+
+# -- daily entries ----------------------------------------------------------
+
+
+class DailyEntryNotFoundError(NotFoundError):
+    code = "daily_entry_not_found"
+    message = "There is no entry for that habit on that date."
+
+
+class InvalidEntryStatusError(InvalidConfigurationError):
+    code = "invalid_entry_status"
+    message = "Unknown daily entry status."
+
+
+class FutureEntryError(InvalidConfigurationError):
+    """A future date only accepts a deliberately planned skip."""
+
+    code = "future_entry_not_allowed"
+    message = "Only a planned skip can be recorded for a future date."
+
+
+class SkipReasonRequiredError(InvalidConfigurationError):
+    code = "skip_reason_required"
+    message = "Enter why the habit was skipped."
+
+
+class SkipReasonNotAllowedError(InvalidConfigurationError):
+    code = "skip_reason_not_allowed"
+    message = "A skip reason only applies to a deliberately skipped entry."
+
+
+class InvalidSkipReasonError(InvalidConfigurationError):
+    code = "invalid_skip_reason"
+    message = "The skip reason is not valid."
+
+
+class InvalidNoteError(InvalidConfigurationError):
+    code = "invalid_note"
+    message = "The note is not valid."
+
+
+class InvalidQuantityValueError(InvalidConfigurationError):
+    code = "invalid_quantity"
+    message = "The quantity is not valid."
+
+
+class QuantityNotAllowedError(InvalidConfigurationError):
+    code = "quantity_not_allowed"
+    message = "This habit does not track a quantity."
+
+
+class QuantityDecimalNotAllowedError(InvalidConfigurationError):
+    code = "quantity_decimal_not_allowed"
+    message = "This habit is configured for whole numbers only."

@@ -259,27 +259,72 @@ For weekly habits, the requirement is resolved at the end of the calendar week.
 
 ## 6. Daily habit entry
 
-A daily habit record should support at least:
+> Implemented in Stage 3 (§6.1). The daily screen is «Итоги дня».
+
+A daily habit record supports at least:
 
 - habit_id;
 - date;
 - status;
-- quantity_value, nullable;
-- quantity_unit or resolved unit reference;
+- quantity_value, nullable (stored as an exact integer number of millionths; the
+  unit is *not* duplicated here but resolved from the habit configuration of that
+  date);
 - note, nullable;
 - skip_reason, nullable;
 - created_at;
 - updated_at.
 
-Suggested statuses:
+`habit_id + entry_date` is unique: saving a day edits its one record rather than
+appending another.
+
+Statuses:
 
 - `done`
 - `missed`
-- `skipped_with_reason`
+- `skipped`
 
 Historical days must remain editable.
 
 Future planned skips may be entered.
+
+### 6.1 Implemented semantics (Stage 3)
+
+A day can be recorded by hand: open a date and state, per habit, what happened.
+
+**«No entry» is a state of its own.** The absence of a record means the user has
+said nothing about that habit on that day. Nothing derives `missed` from silence —
+not for recent days and not for old ones. `missed` exists only because the user
+stated it. Automatic evaluation, overdue detection and streaks belong to Stage 4
+and must never be back-filled into the records.
+
+**One habit and one date hold at most one record** (a uniqueness constraint in the
+database, not just a convention in code). Saving a day again edits that record
+rather than adding a second one.
+
+**States.**
+
+| Status | Meaning | Allowed on |
+| --- | --- | --- |
+| `done` | The habit was performed | today, past |
+| `missed` | The user states it was not performed | today, past |
+| `skipped` | A deliberate/planned skip | past, today, **future** |
+
+A future date accepts a planned skip and nothing else. The rule is enforced by
+the backend, independently of what the screen offers.
+
+**Skip reason** is stored separately from the note and belongs only to `skipped`,
+where it is required (and must not be blank). For `done`/`missed` the field is
+empty. **Note** is a free-form remark available for any status.
+
+**Editing and clearing.** A recorded day can be changed at any time, and can be
+removed entirely — which returns it to «no entry», never to `missed`.
+
+**Quantity** is optional and structured, and only exists for habits whose
+tracking mode is `binary_quantity`. It is validated against the habit
+configuration that was effective **on that date** (unit and decimal rule), not
+against the habit's current settings, and it is stored as an exact value rather
+than a floating-point number or a string in the note. Notes and quantities are
+never conflated.
 
 ---
 
@@ -305,6 +350,14 @@ Example reasons:
 - other.
 
 A custom note may accompany the reason.
+
+### 7.1 Implemented (Stage 3)
+
+The reason is a dedicated field on the daily entry, not part of the note. It is
+required for `skipped` and rejected for `done`/`missed`, so a reason can never be
+silently reinterpreted as a different kind of remark. Only `skipped` may be
+recorded for a date that has not happened yet; a planned skip may later be edited
+or removed.
 
 ---
 
@@ -833,7 +886,7 @@ Rules:
 - an edit that would take effect *before* the current version is rejected rather than rewriting recorded meaning (backdating may be added later if it is genuinely needed);
 - saving an unchanged configuration creates no new version.
 
-Same-day collapse remains the Stage 2 rule. Revisit effective-date semantics in Stage 3 when real daily entries exist; do not change it as part of UI localisation. Duplicate habit names within an Area are allowed.
+Same-day collapse remains the rule. Stage 3 revisited it now that real daily entries exist and kept it deliberately: an entry stores the user's observation only, with **no configuration snapshot and no `habit_version_id`**, and resolves its unit, decimal rule and weight through this same effective-dated lookup. A snapshot would duplicate the versions table, and a stored version reference would contradict same-day collapse — an edit made today updates today's version, so today's entry must be read through the resulting configuration. Duplicate habit names within an Area are allowed.
 
 Area name and colour changes are not versioned: they are display metadata, and historical habit configuration keeps referential integrity through `area_id`.
 
@@ -853,25 +906,37 @@ An Area that still has active habits cannot be archived: those habits must be ar
 
 Data protection starts early.
 
-### 23.1 Early safety backup
+### 23.1 Early safety backup (implemented in Stage 3)
 
-Before real daily usage begins, implement a simple automatic SQLite backup.
+A simple automatic SQLite backup, deliberately no more than that — no scheduler,
+no cloud, no restore UI, no integrity dashboard.
 
-Minimum early version:
+Behaviour:
 
-- timestamped database copy;
-- safe backup procedure rather than blind copying during an unsafe write state;
-- predictable backup directory.
-
-This belongs no later than Stage 3.
+- taken once per application start, before the schema state is inspected;
+- at most one automatic backup per calendar day;
+- stored in a predictable directory (`<data dir>/backups`), separate from the live
+  database;
+- named with the date and time (`tracker-2026-09-24-083045.db`);
+- **taken with SQLite's own online backup API**, not a file copy: the database runs
+  in WAL mode, so recent commits live in `tracker.db-wal` and a blind copy of
+  `tracker.db` can be inconsistent or simply miss them;
+- skipped for an in-memory database, for the `test` environment, and when the
+  database file does not exist yet — a test run or a fresh install must not litter
+  backup files;
+- a small retention window (the most recent automatic backups) bounds growth;
+  files this feature did not create are never touched;
+- an existing file is never overwritten (the name is claimed exclusively), so two
+  starts in the same second cannot interleave into one file;
+- a copy that fails removes the file it had started, because a truncated file with
+  a valid-looking name would both look like a real backup and suppress the retry;
+- a failure is logged explicitly and never prevents the application from starting.
 
 ### 23.2 Full backup system
 
 Later add:
 
-- retention policy;
-- recent daily backups;
-- monthly long-term snapshots;
+- a real retention policy (recent daily backups, monthly long-term snapshots);
 - integrity checks;
 - restore workflow.
 
@@ -981,8 +1046,8 @@ Do not treat packaging as a trivial final command.
 |---|---|
 | **1 — Foundation** | React + FastAPI + SQLite + SQLAlchemy + Alembic, config, health/ready, project shell, tests, README |
 | **2 — Areas & Habits** | Areas, habits, weights, archive, tracking modes, quantity config, schedule config, configuration history |
-| **3 — Daily Tracking + Early Backup** | Daily habit entries, done/missed/skip reason, structured quantities, habit notes, historical edit, future skips, simple automatic SQLite backup |
-| **4 — Schedule / Streak / Score Engine** | Monday–Sunday week rules, daily/weekday/N-per-week schedules, flexible same-week completion, streaks, weighted day/week score, date-boundary tests |
+| **3 — Daily Tracking + Early Backup** ✅ | Daily habit entries, done/missed/skip reason, structured quantities, habit notes, historical edit, future skips, simple automatic SQLite backup |
+| **4 — Schedule / Streak / Score Engine** | Monday–Sunday week rules, daily/weekday/N-per-week schedules, flexible same-week completion, streaks, weighted day/week score, date-boundary tests. **Not started.** |
 | **5 — Daily State** | Mood, energy, well-being, sleep category, alcohol, gaming, heavy computer use, optional clarifications, daily note |
 | **6 — Dashboard & Calendar** | Dashboard, current streaks, week progress, yesterday state, monthly calendar, day detail, yearly heatmap |
 | **7A — Analytics Dataset** | Canonical analysis dataset, variable typing, missing values, daily and weekly features, reproducible dataset builder |
@@ -1004,6 +1069,12 @@ Do not treat packaging as a trivial final command.
 ### Stages 1–3
 
 Create a safe data foundation and begin real daily use.
+
+Stage 3 ends at **manual daily tracking plus the early backup**. Concretely it does
+not compute overdue days, streaks, scores, completion percentages, weekly
+allocation or any automatic `missed`, and it does not decide whether a completion
+happened "on the wrong day". Existing schedule configuration is shown as
+information; it drives nothing yet. Those belong to Stage 4.
 
 ### Stages 4–6
 

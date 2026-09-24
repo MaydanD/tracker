@@ -1,4 +1,14 @@
-import type { Area, Habit, HabitInput, HabitVersion } from '../api/types'
+import type {
+  Area,
+  DailyEntry,
+  DailyEntryInput,
+  DayItem,
+  DayState,
+  Habit,
+  HabitInput,
+  HabitVersion,
+} from '../api/types'
+import { localTodayIso } from '../components/daily/dates'
 import { jsonResponse, stubApi, type StubHandler, type StubRequest } from './fetchStub'
 import { areaFixture, habitFixture } from './fixtures'
 
@@ -6,19 +16,23 @@ import { areaFixture, habitFixture } from './fixtures'
  * A deliberately small in-memory stand-in for the Tracker API.
  *
  * It covers the happy paths the pages drive (list with filters, create, update,
- * archive, unarchive, history). It does *not* re-implement backend rules: tests
- * that need the UI to handle a rejection stub that response explicitly, so the
- * fake stays small and cannot drift into a second server.
+ * archive, unarchive, history, and the day screen). It does *not* try to be a
+ * second server: only the rules the screens genuinely depend on are mirrored —
+ * one record per habit and date, the future-date rule, and the skip-reason and
+ * quantity rules. Tests that need the UI to handle a specific rejection stub that
+ * response explicitly instead.
  */
 export interface FakeApi {
   areas: Area[]
   habits: Habit[]
+  entries: DailyEntry[]
   handle: StubHandler
 }
 
 export interface FakeApiOptions {
   areas?: Area[]
   habits?: Habit[]
+  entries?: DailyEntry[]
 }
 
 function conflict(code: string, message: string): Response {
@@ -29,12 +43,22 @@ function notFound(code: string, message: string): Response {
   return jsonResponse({ error: { code, message } }, 404)
 }
 
+function unprocessable(code: string, message: string): Response {
+  return jsonResponse({ error: { code, message } }, 422)
+}
+
+function stamp(): string {
+  return new Date().toISOString().slice(0, 19)
+}
+
 export function createFakeApi(options: FakeApiOptions = {}): FakeApi {
   const state = {
     areas: [...(options.areas ?? [])],
     habits: [...(options.habits ?? [])],
+    entries: [...(options.entries ?? [])],
     nextAreaId: 100,
     nextHabitId: 100,
+    nextEntryId: 100,
   }
 
   const findArea = (id: number): Area | undefined =>
@@ -189,21 +213,182 @@ export function createFakeApi(options: FakeApiOptions = {}): FakeApi {
     return null
   }
 
+  function findEntry(habitId: number, entryDate: string): DailyEntry | undefined {
+    return state.entries.find(
+      (entry) => entry.habit_id === habitId && entry.entry_date === entryDate,
+    )
+  }
+
+  /** The day screen: habits that existed then, with that date's record. */
+  function readDay(entryDate: string): Response {
+    const today = localTodayIso()
+    const items: DayItem[] = state.habits
+      .filter((habit) => habit.current_version.effective_from <= entryDate)
+      .filter(
+        (habit) =>
+          !habit.is_archived ||
+          findEntry(habit.id, entryDate) !== undefined,
+      )
+      .map((habit) => ({
+        habit_id: habit.id,
+        name: habit.name,
+        area: habit.area,
+        weight: habit.weight,
+        tracking_mode: habit.tracking_mode,
+        quantity_unit: habit.quantity_unit,
+        quantity_allows_decimal: habit.quantity_allows_decimal,
+        schedule: habit.schedule,
+        is_archived: habit.is_archived,
+        entry: findEntry(habit.id, entryDate) ?? null,
+      }))
+      .sort(
+        (a, b) =>
+          a.area.name.localeCompare(b.area.name) || a.name.localeCompare(b.name),
+      )
+
+    const day: DayState = {
+      entry_date: entryDate,
+      today,
+      is_future: entryDate > today,
+      items,
+    }
+    return jsonResponse(day)
+  }
+
+  function saveEntry(
+    habitId: number,
+    entryDate: string,
+    input: DailyEntryInput,
+  ): Response {
+    const habit = findHabit(habitId)
+    if (!habit) return notFound('habit_not_found', 'That habit does not exist.')
+    if (habit.current_version.effective_from > entryDate) {
+      return notFound(
+        'configuration_not_found',
+        'No configuration was effective for that habit on that date.',
+      )
+    }
+
+    const today = localTodayIso()
+    const status = input.status
+
+    if (entryDate > today && status !== 'skipped') {
+      return unprocessable(
+        'future_entry_not_allowed',
+        'Only a planned skip can be recorded for a future date.',
+      )
+    }
+
+    const reason = (input.skip_reason ?? '').trim()
+    if (status === 'skipped' && reason === '') {
+      return unprocessable('skip_reason_required', 'Enter why the habit was skipped.')
+    }
+    if (status !== 'skipped' && reason !== '') {
+      return unprocessable(
+        'skip_reason_not_allowed',
+        'A skip reason only applies to a deliberately skipped entry.',
+      )
+    }
+
+    const quantity = input.quantity_value ?? null
+    if (quantity !== null) {
+      if (habit.tracking_mode !== 'binary_quantity') {
+        return unprocessable('quantity_not_allowed', 'This habit does not track a quantity.')
+      }
+      if (!habit.quantity_allows_decimal && !Number.isInteger(quantity)) {
+        return unprocessable(
+          'quantity_decimal_not_allowed',
+          'This habit is configured for whole numbers only.',
+        )
+      }
+    }
+
+    const note = (input.note ?? '').trim()
+    const existing = findEntry(habitId, entryDate)
+    const entry: DailyEntry = {
+      id: existing?.id ?? state.nextEntryId++,
+      habit_id: habitId,
+      entry_date: entryDate,
+      status,
+      quantity_value: quantity,
+      quantity_unit: habit.quantity_unit,
+      skip_reason: status === 'skipped' ? reason : null,
+      note: note === '' ? null : note,
+      created_at: existing?.created_at ?? stamp(),
+      updated_at: stamp(),
+    }
+    state.entries = [
+      ...state.entries.filter(
+        (candidate) =>
+          candidate.habit_id !== habitId || candidate.entry_date !== entryDate,
+      ),
+      entry,
+    ]
+    return jsonResponse(entry)
+  }
+
+  function entryRoutes(
+    method: string,
+    habitId: number | null,
+    entryDate: string | null,
+    request: StubRequest,
+  ): Response | null {
+    if (habitId === null || entryDate === null) return null
+    const habit = findHabit(habitId)
+    if (!habit) return notFound('habit_not_found', 'That habit does not exist.')
+
+    if (method === 'GET') {
+      const entry = findEntry(habitId, entryDate)
+      if (!entry) {
+        return notFound('daily_entry_not_found', 'There is no entry for that habit on that date.')
+      }
+      return jsonResponse(entry)
+    }
+
+    if (method === 'PUT') {
+      return saveEntry(habitId, entryDate, request.body as DailyEntryInput)
+    }
+
+    if (method === 'DELETE') {
+      state.entries = state.entries.filter(
+        (entry) => entry.habit_id !== habitId || entry.entry_date !== entryDate,
+      )
+      return {
+        ok: true,
+        status: 204,
+        text: async () => '',
+      } as unknown as Response
+    }
+
+    return null
+  }
+
   function handle(request: StubRequest): Response {
     const segments = request.path.split('/').filter((part) => part.length > 0)
-    const [, resource, rawId, action = null] = segments
+    const [, resource, rawId, action = null, extra = null] = segments
     const id = rawId !== undefined && /^\d+$/.test(rawId) ? Number(rawId) : null
     // A path like /api/habits/archive has no numeric id, so treat the segment as
     // the action instead of an id.
     const resolvedAction = rawId !== undefined && id === null ? rawId : action
 
+    if (resource === 'days') {
+      if (rawId === undefined) {
+        return notFound('not_found', 'A day request needs a date.')
+      }
+      return readDay(rawId)
+    }
     if (resource === 'areas') {
       const response = areaRoutes(request.method, id, resolvedAction, request)
       if (response) return response
     }
     if (resource === 'habits') {
-      const response = habitRoutes(request.method, id, resolvedAction, request)
-      if (response) return response
+      if (action === 'entries') {
+        const response = entryRoutes(request.method, id, extra, request)
+        if (response) return response
+      } else {
+        const response = habitRoutes(request.method, id, resolvedAction, request)
+        if (response) return response
+      }
     }
 
     return notFound(
@@ -218,6 +403,9 @@ export function createFakeApi(options: FakeApiOptions = {}): FakeApi {
     },
     get habits() {
       return state.habits
+    },
+    get entries() {
+      return state.entries
     },
     handle,
   }

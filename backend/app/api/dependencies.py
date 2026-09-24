@@ -14,6 +14,7 @@ from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
+from app.core.time import SYSTEM_CLOCK, Clock
 from app.db.database import Database
 
 
@@ -33,6 +34,16 @@ def get_database(request: Request) -> Database:
     return database
 
 
+def get_clock(request: Request) -> Clock:
+    """The application clock, used for every "is this date in the future?" rule.
+
+    Injected rather than read from ``datetime`` at the call site so tests can
+    freeze "today" and so calendar logic is never scattered through services.
+    """
+    clock = getattr(request.app.state, "clock", None)
+    return clock if clock is not None else SYSTEM_CLOCK
+
+
 def get_session(
     database: Annotated[Database, Depends(get_database)],
 ) -> Iterator[Session]:
@@ -48,3 +59,4 @@ def get_session(
 SettingsDep = Annotated[Settings, Depends(get_app_settings)]
 DatabaseDep = Annotated[Database, Depends(get_database)]
 DbSession = Annotated[Session, Depends(get_session)]
+ClockDep = Annotated[Clock, Depends(get_clock)]

@@ -13,7 +13,7 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
-from app.core.time import today_local, utc_now
+from app.core.time import SYSTEM_CLOCK, utc_now
 from app.db.models import Area, Habit, HabitVersion
 from app.db.queries import effective_version, load_habits
 from app.domain.errors import (
@@ -82,7 +82,7 @@ def create_habit(
         HabitVersion.from_config(
             habit_id=habit.id,
             version_number=FIRST_VERSION_NUMBER,
-            effective_from=effective_date or today_local(),
+            effective_from=effective_date or SYSTEM_CLOCK.today(),
             config=config,
         )
     )
@@ -106,7 +106,7 @@ def update_habit(
     habit = get_habit(session, habit_id)
     _ensure_area_usable(session, config.area_id)
 
-    effective_date = effective_date or today_local()
+    effective_date = effective_date or SYSTEM_CLOCK.today()
     current = habit.current_version
 
     action = plan_version_change(
