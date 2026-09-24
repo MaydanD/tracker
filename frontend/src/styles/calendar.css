@@ -1,0 +1,188 @@
+/* Calendar and Heatmap styles */
+
+.calendar-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 1080px;
+}
+
+.calendar-section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.calendar-header__title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.calendar-header__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.calendar-grid__weekday {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  padding: 6px 0;
+}
+
+.calendar-cell {
+  aspect-ratio: 1;
+  min-height: 54px;
+  background: #f8fafc;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.calendar-cell:hover {
+  border-color: var(--color-accent);
+  background: #eef4fc;
+}
+
+.calendar-cell--other-month {
+  opacity: 0.4;
+}
+
+.calendar-cell--today {
+  border: 2px solid var(--color-accent);
+  font-weight: 600;
+}
+
+.calendar-cell--selected {
+  outline: 2px solid var(--color-accent);
+  background: #eef4fc;
+}
+
+.calendar-cell__num {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.calendar-cell__score {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.calendar-cell__mood {
+  font-size: 10px;
+  color: #2f9e5f;
+  font-weight: 600;
+}
+
+/* Heatmap Contribution Grid */
+
+.heatmap-container {
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.heatmap-grid {
+  display: flex;
+  gap: 4px;
+  min-width: 720px;
+}
+
+.heatmap-week {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.heatmap-cell {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: #ebedf0;
+  cursor: pointer;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.heatmap-cell:hover {
+  outline: 1px solid #1f2937;
+}
+
+.heatmap-cell--null {
+  background: #ebedf0;
+}
+
+.heatmap-cell--level-0 {
+  background: #fdecec;
+  border-color: #f3c2c2;
+}
+
+.heatmap-cell--level-1 {
+  background: #d6e4ff;
+}
+
+.heatmap-cell--level-2 {
+  background: #85a5ff;
+}
+
+.heatmap-cell--level-3 {
+  background: #597ef7;
+}
+
+.heatmap-cell--level-4 {
+  background: #2f54eb;
+}
+
+.heatmap-cell--level-5 {
+  background: #10239e;
+}
+
+.heatmap-cell--selected {
+  outline: 2px solid #112233;
+}
+
+/* Day Card Slide-Over Panel */
+
+.day-card-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.day-card-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 10px;
+}

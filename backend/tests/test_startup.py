@@ -69,6 +69,10 @@ EXPECTED_PATHS = {
     # Stage 3 — daily tracking
     "/api/days/{entry_date}",
     "/api/habits/{habit_id}/entries/{entry_date}",
+    # Stage 6 — dashboard & calendar
+    "/api/dashboard",
+    "/api/calendar",
+    "/api/days/{entry_date}/overview",
 }
 
 

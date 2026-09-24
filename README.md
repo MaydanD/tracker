@@ -15,9 +15,9 @@ source of truth for what Tracker will become.
 **UI language: Russian.** All user-facing text, including errors and schedule labels,
 is Russian (PROJECT-SPEC.md §2.1); API fields and codes remain English.
 
-**Current stage: Stage 5 — Daily State.** Areas, habits,
-day-by-day recording, automatic SQLite backup and derived daily/weekly scores,
-quota progress, streaks and independent daily state collection are implemented. See
+**Current stage: Stage 6 — Dashboard & Calendar.** Dashboard, current streaks,
+weekly quota progress, yesterday's daily state, monthly calendar with day cards,
+and annual heatmap are fully implemented. See
 [Known limitations](#known-limitations).
 
 ---
@@ -42,7 +42,12 @@ quota progress, streaks and independent daily state collection are implemented. 
   weighted daily/weekly score and current day/week streaks on «Итоги дня».
 - **Daily State**: optional mood, energy, wellbeing, sleep, alcohol, gaming,
   computer time and a separate day note, with explicit unspecified/no/yes choices.
-- React + TypeScript + Vite shell with working Итоги дня, Habits and Areas
+- **Dashboard & Calendar**: main dashboard with today's & weekly scores and weight,
+  active daily/weekly streaks, weekly quota progress, yesterday's daily state,
+  a Monday-first monthly calendar with cell scores and mood indicators,
+  interactive day cards with direct navigation to «Итоги дня», and an annual heatmap
+  using Stage 4 daily scores.
+- React + TypeScript + Vite shell with working Главная, Итоги дня, Календарь, Habits and Areas
   screens, sidebar navigation for all planned screens, and an always-visible
   backend/health indicator.
 - Backend tests (pytest) and frontend tests (Vitest) that never touch your real
@@ -220,17 +225,11 @@ Migration scripts live in `backend/alembic/versions/`:
 | `0001` | Internal `app_metadata` table (Stage 1) |
 | `8c12a1c62d83` | `areas`, `habits`, `habit_versions` (Stage 2) |
 | `fc1efb50fa8d` | `daily_habit_entries` (Stage 3) |
-| `d5a1c09e2401` | Independent `daily_states` (Stage 5; Stage 4 had no migration) |
+| `d5a1c09e2401` | Independent `daily_states` (Stage 5; Stage 4 and 6 had no migrations) |
 
 Upgrading an existing database is just `alembic upgrade head`; each stage adds its
-own tables and touches no existing data. The Stage 3 migration only creates
-`daily_habit_entries`, so a Stage 2 database keeps every area, habit and version
-exactly as it was.
-
-The Stage 5 migration adds only `daily_states`. Upgrade from Stage 4 and downgrade
-back to `fc1efb50fa8d` preserve all areas, habits, versions and entries. Downgrade
-removes the Daily State table and its observations. Tests compare the migrated
-CHECK expressions with ORM constraints as well as running `alembic check`.
+own tables and touches no existing data. Stage 6 is a read-only presentation and
+aggregation layer, so no new DB migration or schema change was introduced.
 
 Keep `alembic check` passing: it fails when models and migrations disagree.
 
@@ -335,6 +334,14 @@ notes, past-day editing, the future planned-skip rules and clearing a record.
 | `GET /api/habits/{habit_id}/entries/{YYYY-MM-DD}` | One record (404 when the day holds nothing) |
 | `PUT /api/habits/{habit_id}/entries/{YYYY-MM-DD}` | Create or replace that record (idempotent) |
 | `DELETE /api/habits/{habit_id}/entries/{YYYY-MM-DD}` | Clear that record, returning the day to «no entry» |
+
+### Dashboard & Calendar (Stage 6)
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/dashboard` | Main dashboard summary: today score/weight/habits, current week score/quota progress, active streaks, and yesterday's Daily State |
+| `GET /api/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD` | Aggregated date range summary for monthly calendar and yearly heatmap (daily score, obligations, mood indicator) |
+| `GET /api/days/{YYYY-MM-DD}/overview` | Aggregated overview for a day card: daily score, habit entry details, and Daily State summary |
 
 There are deliberately no delete endpoints for habits or areas: they are archived,
 so historical records keep resolving. The only delete in the API removes a daily
@@ -696,5 +703,5 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
 
 ## Next stage
 
-Stage 5 daily collection is complete. Dashboard/calendar and analytics remain
-later stages; no Stage 6 work is included in this implementation.
+Stage 6 Dashboard & Calendar is complete. Analytics dataset (Stage 7A) remains
+the next stage; no Stage 7 analytics work is included in this implementation.

@@ -45,7 +45,7 @@ export function stubFetch(
   return mock
 }
 
-/** Stub a healthy backend (health + readiness). */
+/** Stub a healthy backend (health + readiness + empty dashboard). */
 export function stubHealthyBackend(options: {
   health?: HealthResponse
   readiness?: ReadinessResponse
@@ -58,6 +58,16 @@ export function stubHealthyBackend(options: {
     if (url.endsWith('/api/health')) return jsonResponse(health)
     if (url.endsWith('/api/ready')) {
       return jsonResponse(readiness, readiness.status === 'ready' ? 200 : 503)
+    }
+    if (url.endsWith('/api/dashboard')) {
+      return jsonResponse({
+        today: '2026-09-25',
+        today_progress: { score: null, completed_weight: 0, required_weight: 0, entry_date: '2026-09-25', obligations: [] },
+        week_progress: { score: null, completed_weight: 0, required_weight: 0, week_start: '2026-09-21', week_end: '2026-09-27', habits: [] },
+        streaks: [],
+        yesterday_state: null,
+        today_items: [],
+      })
     }
     return jsonResponse({ error: { code: 'not_found', message: 'No route.' } }, 404)
   })

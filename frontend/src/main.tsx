@@ -5,6 +5,8 @@ import App from './App'
 import './styles/global.css'
 import './styles/layout.css'
 import './styles/ui.css'
+import './styles/dashboard.css'
+import './styles/calendar.css'
 
 const container = document.getElementById('root')
 if (!container) {

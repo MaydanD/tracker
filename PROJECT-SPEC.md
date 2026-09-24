@@ -670,20 +670,14 @@ UI расширяет только «Итоги дня»: оценки дня/н
 
 The Dashboard is the main screen.
 
-Initial content:
+### 11.1 Реализовано: Stage 6 — Dashboard & Calendar
 
-1. Today / selected day score.
-2. Yesterday's mood/state summary.
-3. Today's habit list.
-4. Current streaks.
-5. Current week progress.
-6. Large heatmap.
-7. Current problems / things that are slipping.
-8. Owl commentary.
-9. Recent insights.
-10. Recent records.
+Главный Dashboard открывается на сегодняшнем дне (определяется через injected Clock) и предоставляет краткую сводку:
 
-The dashboard must remain useful before advanced analytics exists.
+1. **Сегодня**: дата, daily score %, выполненный и требуемый вес, статус «Нет обязательных привычек» (при score = null), список главных привычек дня с текущими статусами и кнопка быстрого перехода в «Итоги дня».
+2. **Эта неделя**: weekly score %, выполненный и требуемый вес недели, прогресс недельных привычек (`выполнено / квота`), статусы (`satisfied`, `pending`, `failed`) и предпочтительные дни недели.
+3. **Текущие серии (Streaks)**: отображение действующих серий с разделением дневных (`🔥 N дней`) и недельных (`🔥 N недель`), вычисленных через Stage 4 streak engine.
+4. **Вчерашнее состояние (Daily State)**: компактный блок состояния вчерашней даты с сохранением трехзначной семантики (`null` != `false`): настроение, энергия, самочувствие, статус и время сна, алкоголь, игры, время за компьютером, короткий превью заметки либо сообщение «Состояние вчера не заполнено».
 
 ---
 
@@ -691,25 +685,26 @@ The dashboard must remain useful before advanced analytics exists.
 
 ### 12.1 Monthly view
 
-Show days and general completion/state.
+Месячный календарь с сеткой **Monday-first** (`Пн Вт Ср Чт Пт Сб Вс`), переключением месяцев (← / Сегодня / →) и выбором дня.
+Ячейка дня показывает:
+- номер дня;
+- daily score % (или «—» при отсутствии обязательств либо для будущих дней);
+- компактный индикатор настроения (`● 4`).
 
-Clicking a day opens:
-
-- habit completions;
-- quantities;
-- notes;
-- mood;
-- energy;
-- well-being;
-- sleep;
-- factors;
-- daily note.
+При клике на день открывается **Карточка дня (Day Card)**:
+- общая информация: дата, daily score %, вес;
+- записи привычек: название, статус (`Выполнено`, `Пропущено`, `Осознанный пропуск`, `Нет отметки`), количество с единицей измерения и заметка;
+- состояние дня (Daily State): все 8 полей либо сообщение «Состояние дня не заполнено»;
+- ссылка «Открыть день →» для редактирования в «Итогах дня».
 
 ### 12.2 Year view
 
-GitHub-style yearly heatmap.
-
-Heatmap intensity should primarily reflect action completion/day score, not mood.
+Годовая heatmap в стиле contribution-grid (53/54 недели x 7 дней):
+- **Метрика**: Stage 4 daily score (0–100%).
+- **Интенсивность**: 6 уровней (0%, 1–25%, 26–50%, 51–75%, 76–99%, 100%).
+- **Отсутствие обязательств и будущие дни**: зафиксированы как `null` и отображаются нейтральным цветом без искажения статистики.
+- **Сегодня**: показывает актуальный live daily score.
+- **Интерактивность**: клик по историческому или сегодняшнему дню открывает карточку дня.
 
 ---
 
@@ -1215,8 +1210,8 @@ Do not treat packaging as a trivial final command.
 | **2 — Areas & Habits** | Areas, habits, weights, archive, tracking modes, quantity config, schedule config, configuration history |
 | **3 — Daily Tracking + Early Backup** ✅ | Daily habit entries, done/missed/skip reason, structured quantities, habit notes, historical edit, future skips, simple automatic SQLite backup |
 | **4 — Schedule / Streak / Score Engine** ✅ | Implemented: Monday–Sunday quotas, flexible same-week completion, daily/weekly streaks, weighted day/week score, compact daily-screen UI and boundary/regression tests. Semantics: §10.4. |
-| **5 — Daily State** | Mood, energy, well-being, sleep category, alcohol, gaming, heavy computer use, optional clarifications, daily note |
-| **6 — Dashboard & Calendar** | Dashboard, current streaks, week progress, yesterday state, monthly calendar, day detail, yearly heatmap |
+| **5 — Daily State** ✅ | Mood, energy, well-being, sleep category, alcohol, gaming, heavy computer use, optional clarifications, daily note |
+| **6 — Dashboard & Calendar** ✅ | Implemented: main dashboard, active streaks, week progress, yesterday's state, Monday-first monthly calendar, day card, yearly heatmap with Stage 4 daily score metric, and read-only aggregation APIs |
 | **7A — Analytics Dataset** | Canonical analysis dataset, variable typing, missing values, daily and weekly features, reproducible dataset builder |
 | **7B — Association Engine** | Same-day binary/categorical/numeric associations, effect sizes, supported pair types |
 | **7C — Lag Engine** | Lag 0–7, previous-state features, rolling/weekly windows where justified |
