@@ -1,4 +1,4 @@
-import type { DayItem } from '../../api/types'
+import type { DayItem, ProgressState } from '../../api/types'
 import { DayHabitRow, entryKey } from './DayHabitRow'
 
 export interface HabitDayListProps {
@@ -6,6 +6,7 @@ export interface HabitDayListProps {
   entryDate: string
   isFuture: boolean
   onChanged: () => void
+  progress?: ProgressState | null
 }
 
 /**
@@ -21,6 +22,7 @@ export function HabitDayList({
   entryDate,
   isFuture,
   onChanged,
+  progress,
 }: HabitDayListProps) {
   return (
     <ul className="day-list">
@@ -31,6 +33,8 @@ export function HabitDayList({
           entryDate={entryDate}
           isFuture={isFuture}
           onChanged={onChanged}
+          streak={progress?.streaks.find((s) => s.habit_id === item.habit_id)}
+          weekProgress={progress?.week.habits.find((p) => p.habit_id === item.habit_id)}
         />
       ))}
     </ul>

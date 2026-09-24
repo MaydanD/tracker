@@ -6,6 +6,7 @@ import { addDays, localTodayIso } from '../components/daily/dates'
 import { jsonResponse, stubApi } from '../test/fetchStub'
 import { createFakeApi, stubFakeApi } from '../test/fakeApi'
 import { areaFixture, habitFixture } from '../test/fixtures'
+import { progressFixture } from '../test/progressFixture'
 import { CheckInPage } from './CheckInPage'
 
 const TODAY = localTodayIso()
@@ -498,6 +499,7 @@ describe('CheckInPage', () => {
 
   it('shows the server’s rejection in Russian', async () => {
     stubApi({
+      [`GET /api/progress/days/${TODAY}`]: () => jsonResponse(progressFixture(TODAY)),
       [`GET /api/days/${TODAY}`]: () =>
         jsonResponse({
           entry_date: TODAY,
@@ -554,6 +556,8 @@ describe('CheckInPage', () => {
   it('never shows one day’s controls under another day’s date', async () => {
     const tomorrow = stalledResponse(dayPayload(TOMORROW, true))
     stubApi({
+      [`GET /api/progress/days/${TODAY}`]: () => jsonResponse(progressFixture(TODAY)),
+      [`GET /api/progress/days/${TOMORROW}`]: () => jsonResponse(progressFixture(TOMORROW)),
       [`GET /api/days/${TODAY}`]: () => jsonResponse(dayPayload(TODAY, false)),
       [`GET /api/days/${TOMORROW}`]: () => tomorrow.response,
     })

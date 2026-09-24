@@ -1,7 +1,7 @@
 """Habit scheduling rules.
 
-Stage 2 stores and validates schedule *configuration* only. Completing habits,
-resolving streaks and allocating flexible completions belong to Stage 4.
+Schedule configuration is validated here; pure Stage 4 evaluation lives in
+``app.domain.progress``.
 
 Product rules encoded here:
 

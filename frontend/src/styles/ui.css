@@ -555,3 +555,17 @@ ul.banner--error {
 .state__reason {
   font-weight: 600;
 }
+.progress-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 20px;
+  margin-block: 16px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
+.progress-summary h2 { margin-top: 0; font-size: 17px; }
+.progress-summary p { margin-block: 8px; }
+.progress-summary strong { font-size: 24px; }
+.habit-progress { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }

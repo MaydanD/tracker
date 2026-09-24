@@ -15,9 +15,9 @@ source of truth for what Tracker will become.
 **UI language: Russian.** All user-facing text, including errors and schedule labels,
 is Russian (PROJECT-SPEC.md §2.1); API fields and codes remain English.
 
-**Current stage: Stage 3 — Daily Tracking + Early Backup.** Areas, habits and
-day-by-day recording are in place, and the database is backed up automatically
-once a day. Streaks, scores and schedule evaluation are Stage 4. See
+**Current stage: Stage 4 — Schedule + Streak + Score.** Areas, habits,
+day-by-day recording, automatic SQLite backup and derived daily/weekly scores,
+quota progress and streaks are implemented. See
 [Known limitations](#known-limitations).
 
 ---
@@ -38,6 +38,8 @@ once a day. Streaks, scores and schedule evaluation are Stage 4. See
   cleared back to «no entry».
 - **Automatic SQLite backup**: one consistent, timestamped copy per calendar day,
   written with SQLite's own backup API so WAL mode cannot make it incomplete.
+- **Schedule, score and streaks**: calendar Mon–Sun quotas, same-week transfers,
+  weighted daily/weekly score and current day/week streaks on «Итоги дня».
 - React + TypeScript + Vite shell with working Итоги дня, Habits and Areas
   screens, sidebar navigation for all planned screens, and an always-visible
   backend/health indicator.
@@ -357,8 +359,7 @@ move its habits first. Restoring a habit also requires an active Area.
 A habit belongs to exactly one area and carries:
 
 - **name** and optional description (duplicate habit names within an Area are allowed);
-- **weight** — `1` normal, `2` important, `3` key (used by the future score
-  engine);
+- **weight** — `1` normal, `2` important, `3` key (used by the score engine);
 - **tracking mode** — `binary` (done / not done) or `binary_quantity`;
 - **quantity configuration** — for `binary_quantity`, a unit (free text:
   `pages`, `minutes`, `km`, `reps`, …) and whether decimals are expected.
@@ -376,7 +377,7 @@ A habit belongs to exactly one area and carries:
 
 The canonical week is **Monday–Sunday**; weekly quotas are calendar-week quotas,
 never rolling seven-day windows. Preferred weekdays are *preferences*, not fixed
-slots — Stage 4 may satisfy a weekly quota with a completion on another day of
+slots — Stage 4 satisfies a weekly quota with a completion on another day of
 the same week. For weekday schedules the quota is derived from the selected
 days, so "Mon/Wed/Fri with a quota of 2" cannot be expressed: there is exactly
 one source of truth. A habit completes at most once per calendar date, which is
@@ -459,6 +460,75 @@ Six places is a deliberate bound rather than an implementation detail: it is far
 beyond what any hand-recorded unit needs (a gram of a body weight in kg, a metre
 of a distance in km), the value is non-negative and capped at 1 000 000, and the
 scaled integer therefore stays well inside a signed 64-bit column.
+
+### Schedule + Streak + Score (Stage 4)
+
+The week is always **Monday–Sunday**, never rolling seven days. `daily` creates
+one obligation per active date. `weekdays` means a flexible weekly quota equal to
+the number of preferred days; `times_per_week` means N completions. Tue/Thu/Sat
+can satisfy Mon/Wed/Fri, but completions cannot move between weeks. Each `done`
+counts once, regardless of quantity. Preferred days never disable recording.
+
+The only score formula is **completed required weight / required weight × 100**.
+Weights 1/2/3 mean normal/important/key. Daily score includes only daily habits;
+weekly score sums their dated obligations plus each weekly quota times its
+weight. Weekly credit is capped at quota, although progress shows the real count
+(e.g. 5/3). `missed`, `skipped` (any reason) and no entry contribute zero without
+removing required weight. Zero obligations return `null`, shown as
+«Нет обязательных привычек». Reads never write implicit `missed` entries or
+materialize scores/streaks; no schema migration is needed.
+
+Daily streaks count consecutive `done` days. Historical missed/skipped/unrecorded
+required days break them; an unfinished today preserves yesterday's streak and a
+`done` today extends it immediately. Weekly streaks count consecutive successful
+Mon–Sun quotas. An incomplete current week preserves previous weeks; reaching
+quota extends the streak immediately. An unfinished Sunday is still pending;
+failure is resolved on Monday. Live score already includes outstanding
+obligations, including the rest of this week's daily dates. All current-period
+decisions use the injected Clock.
+
+**Historical configuration, including mixed weeks:** daily dates each use their
+own effective version. A weekly component takes quota, weight and preferred days
+from the **first active weekly-scheduled date of that calendar week**. Later
+weekly edits apply to the following week. Only dates whose effective schedule is
+weekly contribute to that quota; dates with daily schedules contribute separately.
+This handles daily ↔ weekly changes without double credit. A mixed week's API
+exposes both counts, and the UI explains them. Weekly streaks evaluate the weekly
+component; daily streaks stop at a schedule-unit change. Creation midweek starts
+daily obligations on creation, but starts a **full weekly quota, without
+proration**, even if too few days remain. Existing same-day version collapse
+remains authoritative; no new snapshot/history mechanism is introduced.
+
+**Archive boundary:** existing UTC `archived_at` is converted to a local date;
+that date is the exclusive cutoff for obligations. Earlier progress stays
+queryable; the already-started weekly quota remains full, and later weeks add
+nothing. Archived streaks are evaluated at the last active date (a weekly quota
+still resolves at Sunday end). Entries on/after the cutoff remain readable and
+editable through Stage 3, but are outside score obligations. The existing restore
+operation clears `archived_at`, so previous archive intervals cannot be recovered;
+restoring again treats the lifetime as active. We do not invent an archive date
+from `updated_at` or add an archive-event subsystem. A legacy archived row missing
+its timestamp creates no derived obligations; its records remain readable.
+Changing the system timezone can change the local date of a UTC archive boundary.
+
+| Read-only endpoint | Result |
+| --- | --- |
+| `GET /api/progress/days/{YYYY-MM-DD}` | Daily score, weights, obligations and raw entry states; selected calendar week; current streaks |
+| `GET /api/progress/weeks/{YYYY-MM-DD}` | Normalized Mon–Sun bounds, score, weights, per-habit quota/count/preferred days and satisfied/pending/failed status |
+| `GET /api/habits/{habit_id}/progress` | Current streak, days/weeks unit, as-of date, current weekly progress |
+
+«Итоги дня» adds compact daily/weekly scores, weighted totals, per-habit progress,
+current streaks and preferred-day explanations. Changing or clearing an entry
+refreshes them; late responses cannot show another date's score. The selected
+date controls day/week progress; streaks explicitly show their current as-of date.
+There is no new dashboard, calendar, heatmap or state tracking. Full boundary
+semantics are specified in [PROJECT-SPEC.md §10.4](PROJECT-SPEC.md#104-реализовано-stage-4--schedule--streak--score).
+
+Stage 4 regression tests cover domain rules, database/API history and read
+purity, calendar/creation/configuration/archive boundaries, quantity-independent
+completion, score caps, current-period grace, Russian UI, off-preferred-day
+recording, clearing, retries and late responses. Contract fixtures in frontend
+tests do not reimplement the scoring engine.
 
 ### Backups
 
@@ -543,11 +613,10 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
 
 ## Known limitations
 
-- **No schedule execution.** Streaks, day/week scores and flexible same-week
-  completion allocation are Stage 4. The day screen shows a habit's schedule as
-  information only: every habit that existed on the date is listed, nothing is
-  assigned to a day, and nothing is ever marked `missed` automatically. An
-  unrecorded day stays «Нет отметки» for as long as the user leaves it that way.
+- **No archive-event history.** The existing model retains only the current
+  `archived_at`; restore clears it. Stage 4 uses this boundary as documented above.
+- **Full partial-week quota.** Creation or schedule change midweek does not
+  prorate a weekly quota; the UI shows the required count explicitly.
 - Still absent: mood/energy/well-being/sleep/factors, dashboard content,
   calendar and heatmaps, analytics, insights, the owl, experiments, records,
   Excel export, restore and the Windows executable.
@@ -565,9 +634,6 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
 
 ## Next stage
 
-**Stage 4 — Schedule / Streak / Score Engine:** Monday–Sunday week rules, flexible
-same-week completion, streaks and a weighted day/week score, all recomputable from
-the records already stored (see `PROJECT-SPEC.md`, sections 27 and 28).
-
-Stage 3 deliberately stops here: it records what the user says happened and never
-computes anything on top of it.
+**Stage 5 — Daily State:** mood, energy, well-being, sleep categories, daily
+factors and note. These are not implemented in Stage 4 and will never change the
+habit-score formula. Dashboard/calendar and analytics remain later stages.

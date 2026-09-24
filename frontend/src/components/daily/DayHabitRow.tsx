@@ -2,7 +2,8 @@ import { useState, type FormEvent } from 'react'
 
 import { describeApiError } from '../../api/client'
 import { deleteDailyEntry, saveDailyEntry } from '../../api/daily'
-import type { DailyEntry, DailyEntryInput, DayItem, EntryStatus } from '../../api/types'
+import type { DailyEntry, DailyEntryInput, DayItem, EntryStatus, HabitStreak, WeekHabitProgress } from '../../api/types'
+import { HabitWeekLabel, StreakLabel } from './ProgressSummary'
 import { ErrorBanner } from '../Feedback'
 import { scheduleLabel, unitLabel, weightLabel } from '../habits/options'
 import { DAILY_STATUS_OPTIONS, NO_ENTRY_LABEL, statusActionLabel, statusLabel } from './status'
@@ -21,6 +22,8 @@ export interface DayHabitRowProps {
   /** A date that has not happened yet: only a planned skip is offered. */
   isFuture: boolean
   onChanged: () => void
+  streak?: HabitStreak
+  weekProgress?: WeekHabitProgress
 }
 
 function draftFrom(entry: DailyEntry | null): Draft {
@@ -91,6 +94,8 @@ export function DayHabitRow({
   entryDate,
   isFuture,
   onChanged,
+  streak,
+  weekProgress,
 }: DayHabitRowProps) {
   const [draft, setDraft] = useState<Draft>(() => draftFrom(item.entry))
   const [problems, setProblems] = useState<string[]>([])
@@ -205,6 +210,9 @@ export function DayHabitRow({
         </span>
         <EntrySummary item={item} />
       </div>
+
+      {streak ? <StreakLabel streak={streak} /> : null}
+      {weekProgress ? <HabitWeekLabel progress={weekProgress} /> : null}
 
       <div className="day-row__meta">
         <span className="pill">{item.area.name}</span>

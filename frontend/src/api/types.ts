@@ -190,3 +190,40 @@ export interface HabitInput {
   quantity_allows_decimal?: boolean
   schedule: ScheduleInput
 }
+export interface Score {
+  score: number | null
+  completed_weight: number
+  required_weight: number
+}
+
+export interface WeekHabitProgress extends Score {
+  habit_id: number
+  name: string
+  quota: number
+  completed_count: number
+  daily_required_count: number
+  daily_completed_count: number
+  weekly_quota: number
+  weekly_completed_count: number
+  weekly_weight: number | null
+  weekly_effective_from: string | null
+  preferred_weekdays: number[]
+  status: 'satisfied' | 'pending' | 'failed'
+}
+
+export interface HabitStreak {
+  habit_id: number
+  current_streak: number
+  unit: 'days' | 'weeks'
+  as_of: string
+}
+
+export interface ProgressState {
+  today: string
+  day: Score & {
+    entry_date: string
+    obligations: { habit_id: number; name: string; weight: number; entry_status: EntryStatus | null; satisfied: boolean }[]
+  }
+  week: Score & { week_start: string; week_end: string; habits: WeekHabitProgress[] }
+  streaks: HabitStreak[]
+}

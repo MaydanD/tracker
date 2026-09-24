@@ -11,6 +11,7 @@ import type {
 import { localTodayIso } from '../components/daily/dates'
 import { jsonResponse, stubApi, type StubHandler, type StubRequest } from './fetchStub'
 import { areaFixture, habitFixture } from './fixtures'
+import { progressFixture } from './progressFixture'
 
 /**
  * A deliberately small in-memory stand-in for the Tracker API.
@@ -364,6 +365,9 @@ export function createFakeApi(options: FakeApiOptions = {}): FakeApi {
   }
 
   function handle(request: StubRequest): Response {
+    if (request.path.startsWith('/api/progress/days/')) {
+      return jsonResponse(progressFixture(request.path.split('/').at(-1)))
+    }
     const segments = request.path.split('/').filter((part) => part.length > 0)
     const [, resource, rawId, action = null, extra = null] = segments
     const id = rawId !== undefined && /^\d+$/.test(rawId) ? Number(rawId) : null

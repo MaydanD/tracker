@@ -489,13 +489,112 @@ Day score should evaluate only required daily obligations that are meaningfully 
 
 For flexible weekly habits, avoid pretending every preferred day is a rigid failed obligation if the weekly quota can still be satisfied later.
 
-The exact presentation for flexible weekly habits should be resolved during Stage 4, but the weekly score formula above is authoritative.
+Stage 4 includes only `daily` obligations in day score. Flexible habits have a
+separate weekly progress and contribute to the weekly score (§10.4).
 
 ### 10.3 Recomputability
 
 Do not treat stored score values as authoritative historical facts.
 
 Scores must be recomputable from raw entries, schedule history, and weights.
+
+### 10.4 Реализовано: Stage 4 — Schedule + Streak + Score
+
+**Неделя всегда Пн–Вс**, без rolling windows. `daily` создаёт одно обязательство
+на каждый активный календарный день. `weekdays` задаёт предпочтительные дни и
+квоту, равную их количеству; `times_per_week` задаёт квоту N. Выполнение в любой
+другой день той же недели закрывает недельную квоту. Переноса между неделями нет.
+Одна запись `done` даёт одно выполнение, независимо от quantity.
+
+**Оценка:** `completed_required_weight / total_required_weight × 100`.
+Вес 1 — обычная, 2 — важная, 3 — ключевая привычка. Дополнительных коэффициентов
+нет. Дневной знаменатель включает только `daily`, по весу версии конкретного дня.
+Недельный включает сумму ежедневных обязательств и `quota × weight` недельных
+компонентов. Их числитель — `min(done_count, quota) × weight`; фактический progress
+может превышать quota, оценка — никогда не превышает 100%. При нулевом знаменателе
+score равен `null`, UI показывает «Нет обязательных привычек».
+
+`missed`, `skipped` (с любой причиной) и отсутствие строки дают нулевой числитель,
+не уменьшая знаменатель. Причина — описание события, не освобождение от
+обязательства. **No entry остаётся no entry:** вычисления никогда не добавляют и
+не переписывают строки `daily_habit_entries` и не сохраняют score/streak counters.
+Состояние пользователя (настроение, сон и т. п.) в формулу не входит.
+
+**Незавершённые периоды:** дневная и недельная оценка live, включая ещё не
+выполненные обязательства и оставшиеся дни текущей недели в знаменателе.
+Прогресс `satisfied` означает, что выполнены все обязательства компонента/недели;
+`pending` — квота ещё не достигнута и воскресенье ещё не завершилось (в том числе
+для будущей недели); `failed` — неполная уже завершённая неделя.
+
+**Серии:** daily streak — последовательные дни `done`; исторические `missed`,
+`skipped` и no entry его обрывают. Сегодняшний незавершённый день сохраняет
+вчерашнюю серию, а сегодняшний `done` сразу добавляет день. Для недельного
+расписания серия измеряется последовательными календарными неделями с закрытой
+квотой; текущая неполная неделя не обрывает предыдущую серию, достигнутая квота
+сразу добавляет неделю. Незакрытая квота обрывает серию после завершения
+воскресенья. Отдельный пропущенный предпочтительный день серию не обрывает.
+Текущую дату даёт injected Clock. Серия относится к текущей дате, даже когда
+пользователь просматривает прошлый день; UI явно подписывает дату серии.
+
+**Effective-dated configuration и изменения внутри недели:**
+
+1. Ежедневные обязательства используют существующий `habit_versions` lookup
+   отдельно на каждую дату. Изменение веса с среды меняет ежедневный вес только
+   со среды, прошлые дни сохраняют старый вес.
+2. Для недельной части берётся версия **первого активного дня этой календарной
+   недели, на который действует недельное расписание**. Она определяет quota,
+   weight и preferred weekdays всей недельной части. Изменение недельного веса,
+   квоты или preferred days посреди недели применяется к недельной части со
+   следующей недели. Новых snapshots и ссылок на версию в entries нет.
+3. В недельную часть входят только `done` на активных датах с недельным
+   расписанием. Даты с `daily` учитываются отдельно как дневные обязательства.
+   При переходе daily ↔ weekly неделя имеет обе части: одно выполнение не
+   зачитывается дважды, пропуски daily нельзя закрыть лишними weekly completions.
+   Например: Пн–Вт daily weight 1, со Ср 3/week weight 2 → знаменатель `2 + 6`.
+4. Первая неполная неделя после создания и недельная часть смешанной недели имеют
+   **полную квоту без пропорционального уменьшения**, даже если оставшихся дней
+   меньше квоты. Daily учитывает только реально существующие активные даты.
+   Это сознательное минимальное правило, а не округление или перенос долга.
+5. Единица серии определяется расписанием на текущую (для архива — последнюю
+   активную) дату. Daily streak заканчивается на переходе к недельному расписанию;
+   weekly streak проходит по смежным неделям с недельной частью и заканчивается
+   на неделе без неё. В смешанной неделе для weekly streak важна недельная квота;
+   daily часть влияет на weekly score и общий статус недели отдельно.
+6. Существующее same-day collapse сохраняется: редактирование версии в её день
+   заменяет её, и derived значения пересчитываются. Поздние версии не меняют
+   прошлые календарные недели. API отдаёт `weekly_effective_from` и
+   `weekly_weight`, а для смешанной недели — отдельные daily/weekly counts.
+
+**Архив:** используется существующий `archived_at`, сохранённый в UTC и
+преобразованный в локальную календарную дату. Граница исключающая: начиная с
+даты архивации новые обязательства не учитываются. Расчёты до этой даты сохраняют
+исторические версии и записи. Уже начатая недельная квота остаётся полной;
+последующие недели не создаются. Серия архивной привычки вычисляется по последней
+активной дате; её последняя недельная квота разрешается на границе Пн–Вс.
+Записи на дату архивации и позднее по-прежнему читаются/редактируются через Stage 3,
+но не дают credit вне активного периода. Ничего не удаляется.
+
+Модель Stage 2 хранит только текущее архивирование: unarchive очищает
+`archived_at`. После восстановления расчёт снова считает период после создания
+активным; прежние архивные интервалы неизвестны. Stage 4 не вводит историю
+архивирования и не выдумывает её из `updated_at`. Неконсистентная старая строка
+`is_archived=true, archived_at=null` не создаёт вычисляемых обязательств; её
+реальные записи остаются доступны через Stage 3. Смена системного часового пояса
+может изменить локальную дату UTC-границы; отдельная историческая timezone-модель
+в этот этап не входит.
+
+**API:** `GET /api/progress/days/{on}` возвращает дневной score, обязательства и
+их исходные статусы (`null` для no entry), неделю выбранной даты и текущие серии.
+`GET /api/progress/weeks/{on}` нормализует любую дату к Пн–Вс и возвращает score,
+веса и progress привычек. `GET /api/habits/{habit_id}/progress` возвращает текущую
+серию с единицей `days`/`weeks` и текущий недельный progress (либо `null`, если
+нет активных дат). Данные загружаются пакетно, формулы живут в pure domain layer.
+
+UI расширяет только «Итоги дня»: оценки дня/недели, веса, прогресс, серии,
+предпочтительные дни и пояснение переноса. Все новые пользовательские тексты
+русские. Миграция не нужна: расчёты используют существующие версии, записи и
+архивную дату. Stage 5+ (состояние, новый dashboard, календарь, heatmap,
+аналитика, рекомендации, уведомления и т. п.) не реализован.
 
 ---
 
@@ -1047,7 +1146,7 @@ Do not treat packaging as a trivial final command.
 | **1 — Foundation** | React + FastAPI + SQLite + SQLAlchemy + Alembic, config, health/ready, project shell, tests, README |
 | **2 — Areas & Habits** | Areas, habits, weights, archive, tracking modes, quantity config, schedule config, configuration history |
 | **3 — Daily Tracking + Early Backup** ✅ | Daily habit entries, done/missed/skip reason, structured quantities, habit notes, historical edit, future skips, simple automatic SQLite backup |
-| **4 — Schedule / Streak / Score Engine** | Monday–Sunday week rules, daily/weekday/N-per-week schedules, flexible same-week completion, streaks, weighted day/week score, date-boundary tests. **Not started.** |
+| **4 — Schedule / Streak / Score Engine** ✅ | Implemented: Monday–Sunday quotas, flexible same-week completion, daily/weekly streaks, weighted day/week score, compact daily-screen UI and boundary/regression tests. Semantics: §10.4. |
 | **5 — Daily State** | Mood, energy, well-being, sleep category, alcohol, gaming, heavy computer use, optional clarifications, daily note |
 | **6 — Dashboard & Calendar** | Dashboard, current streaks, week progress, yesterday state, monthly calendar, day detail, yearly heatmap |
 | **7A — Analytics Dataset** | Canonical analysis dataset, variable typing, missing values, daily and weekly features, reproducible dataset builder |
@@ -1074,7 +1173,7 @@ Stage 3 ends at **manual daily tracking plus the early backup**. Concretely it d
 not compute overdue days, streaks, scores, completion percentages, weekly
 allocation or any automatic `missed`, and it does not decide whether a completion
 happened "on the wrong day". Existing schedule configuration is shown as
-information; it drives nothing yet. Those belong to Stage 4.
+information in Stage 3. Stage 4 now evaluates it without changing manual records.
 
 ### Stages 4–6
 

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 
 import { fetchDay } from '../api/daily'
+import { fetchProgress } from '../api/progress'
+import { ProgressSummary } from '../components/daily/ProgressSummary'
 import { EmptyState, ErrorBanner, InfoBanner, LoadingText } from '../components/Feedback'
 import { DayNavigator } from '../components/daily/DayNavigator'
 import { HabitDayList } from '../components/daily/HabitDayList'
@@ -23,11 +25,19 @@ export function CheckInPage() {
   // «Сегодня» button, «Вчера»/«Завтра», which rules apply) comes from the
   // server's date in the response, so both sides agree on what "today" is.
   const [entryDate, setEntryDate] = useState(() => localTodayIso())
+  const [revision, setRevision] = useState(0)
 
-  const { data, error, loading, reload } = useAsyncData(
+  const { data, error, loading } = useAsyncData(
     (signal) => fetchDay(entryDate, signal),
-    [entryDate],
+    [entryDate, revision],
   )
+  const derived = useAsyncData((signal) => fetchProgress(entryDate, signal), [entryDate, revision])
+  const progress = !derived.loading && !derived.error && derived.data?.day.entry_date === entryDate
+    ? derived.data : null
+
+  function refresh() {
+    setRevision((value) => value + 1)
+  }
 
   // Only the response for the date in the navigator is shown. A reload (after a
   // save, or while another day loads) therefore never renders one day's records
@@ -43,7 +53,7 @@ export function CheckInPage() {
     <section className="page">
       <header className="page__header">
         <h1 className="page__title">Итоги дня</h1>
-        <span className="badge">Этап 3</span>
+        <span className="badge">Этап 4</span>
       </header>
       <p className="page__summary">
         Отметьте состояние каждой привычки за выбранный день. Запись можно
@@ -66,6 +76,9 @@ export function CheckInPage() {
       ) : null}
 
       <ErrorBanner message={error} />
+      <ErrorBanner message={derived.error} />
+      {derived.error ? <button className="button" onClick={derived.reload}>Повторить расчёт</button> : null}
+      {progress ? <ProgressSummary progress={progress} /> : null}
 
       {day === null ? (
         <LoadingText>Загрузка отметок за {formatDayLabel(entryDate)}…</LoadingText>
@@ -79,7 +92,8 @@ export function CheckInPage() {
           items={day.items}
           entryDate={day.entry_date}
           isFuture={day.is_future}
-          onChanged={reload}
+          onChanged={refresh}
+          progress={progress}
         />
       )}
     </section>

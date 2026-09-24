@@ -47,6 +47,9 @@ def test_factory_returns_independent_applications(tmp_path: Path) -> None:
 
 
 EXPECTED_PATHS = {
+    "/api/progress/days/{on}",
+    "/api/progress/weeks/{on}",
+    "/api/habits/{habit_id}/progress",
     # Stage 1
     "/api/health",
     "/api/ready",
