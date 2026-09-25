@@ -62,16 +62,32 @@ def extract_pairs(x: Variable, y: Variable, xs: tuple[SeriesPoint, ...],
     ix, iy = {p.date: p for p in xs}, {p.date: p for p in ys}
     if len(ix) != len(xs) or len(iy) != len(ys):
         raise ValueError("Повторяющиеся даты наблюдений недопустимы.")
+    dates = sorted(ix.keys() | iy.keys())
+    return filter_pairs(
+        x, y,
+        tuple(ix.get(on, SeriesPoint(on, None, A.SOURCE_MISSING, False)) for on in dates),
+        tuple(iy.get(on, SeriesPoint(on, None, A.SOURCE_MISSING, False)) for on in dates),
+        today=today,
+    )
+
+
+def filter_pairs(x: Variable, y: Variable, xs: tuple[SeriesPoint, ...],
+                 ys: tuple[SeriesPoint, ...], *, today: date) -> PairedObservations:
+    """Apply the shared availability policy to already aligned observations.
+
+    Preserve original timestamps: 7D pairs can have different dates, and either
+    side can be in the future. Alignment is the caller's responsibility.
+    """
+    if x.grain != y.grain or len(xs) != len(ys):
+        raise ValueError("Требуются выровненные пары одного временного масштаба.")
     losses: dict[Exclusion, int] = {reason: 0 for reason in (
         "future", "incomplete_period", "not_eligible", "missing", "invalid_value", "low_source_coverage")}
     aligned_x, aligned_y, paired_x, paired_y = [], [], [], []
-    for on in sorted(ix.keys() | iy.keys()):
-        a = ix.get(on, SeriesPoint(on, None, A.SOURCE_MISSING, False))
-        b = iy.get(on, SeriesPoint(on, None, A.SOURCE_MISSING, False))
+    for a, b in zip(xs, ys, strict=True):
         aligned_x.append(a)
         aligned_y.append(b)
         reason: Exclusion | None = None
-        if on > today:
+        if a.date > today or b.date > today:
             reason = "future"
         elif x.grain == Grain.WEEKLY and (a.incomplete or b.incomplete):
             reason = "incomplete_period"
@@ -96,7 +112,7 @@ def extract_pairs(x: Variable, y: Variable, xs: tuple[SeriesPoint, ...],
         n / eligible if eligible else None, losses, coverage(aligned_x), coverage(aligned_y),
         source_coverage(aligned_x), source_coverage(aligned_y),
         source_coverage(paired_x), source_coverage(paired_y),
-        x.grain == Grain.DAILY and any(p.date == today for p in paired_x),
+        x.grain == Grain.DAILY and any(p.date == today for p in (*paired_x, *paired_y)),
     )
     return PairedObservations(tuple(paired_x), tuple(paired_y), covered)
 
@@ -130,8 +146,14 @@ def classify(coefficient: float | None, n: int) -> tuple[Direction | None, Stren
 
 def analyze_pair(x: Variable, y: Variable, xs: tuple[SeriesPoint, ...],
                  ys: tuple[SeriesPoint, ...], *, today: date) -> Relationship:
-    selected = methods(x, y)
     paired = extract_pairs(x, y, xs, ys, today=today) if x.grain == y.grain else None
+    return analyze_paired(x, y, xs, ys, paired)
+
+
+def analyze_paired(x: Variable, y: Variable, xs: tuple[SeriesPoint, ...],
+                   ys: tuple[SeriesPoint, ...], paired: PairedObservations | None) -> Relationship:
+    """Shared 7C statistics; xs/ys retain pre-deletion unit history."""
+    selected = methods(x, y)
     a = [p.value for p in paired.x] if paired else []
     b = [p.value for p in paired.y] if paired else []
     # Conservative 7B unit policy: suppress a variable with any observed unit
