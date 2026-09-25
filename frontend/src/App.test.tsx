@@ -22,15 +22,14 @@ describe('App shell', () => {
     }
   })
 
-  it('shows the dashboard placeholder by default', () => {
+  it('shows the main dashboard by default', async () => {
     stubHealthyBackend()
 
     render(<App />)
 
     expect(
-      screen.getByRole('heading', { name: 'Обзор', level: 1 }),
+      await screen.findByRole('heading', { name: 'Главный обзор', level: 1 }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Раздел пока в разработке')).toBeInTheDocument()
   })
 
   it('reports a connected backend with the reported version', async () => {
