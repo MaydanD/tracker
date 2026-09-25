@@ -146,6 +146,8 @@ def build_dataset(data: DatasetInput, start: date, end: date, *, today: date) ->
                     features["required_weight"] = Value(obligation.weight)
                 missing = A.FUTURE if future else A.SOURCE_MISSING if entry is None else None
                 features["status"] = absent(missing) if missing is not None else Value(entry.status)
+                features["completion"] = (absent(missing) if missing is not None else
+                                          Value(entry.status == "done"))
                 if config.tracking_mode == TrackingMode.BINARY_QUANTITY:
                     features["quantity"] = (
                         absent(missing) if missing is not None else

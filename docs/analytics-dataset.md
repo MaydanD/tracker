@@ -108,6 +108,9 @@ NaN/Infinity запрещены типом ячейки. JSON сохраняет
 Дневные признаки привычки:
 
 - `status`: только явные `done`, `missed`, `skipped`. Нет записи — `source_missing`.
+- `completion` (добавлен для Stage 7C): boolean по явной отметке — `done` даёт
+  true, `missed`/`skipped` false. Нет записи остаётся null/source_missing;
+  неприменимость и будущее сохраняют свои причины. `status` не изменён.
 - `quantity`: записанное количество, включая 0; пустое поле — `field_missing`,
   отсутствующая запись — `source_missing`, режим `binary` — `not_applicable`.
 - `weight`: исторический вес действующей привычки.

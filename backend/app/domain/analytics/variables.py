@@ -19,6 +19,7 @@ STATE_FIELDS = (
 
 DAILY_HABIT_FIELDS = (
     ("status", "Отметка", T.CATEGORICAL),
+    ("completion", "Выполнено по явной отметке", T.BOOLEAN),
     ("quantity", "Количество", T.NUMERIC),
     ("weight", "Вес", T.NUMERIC),
     ("required_weight", "Обязательный дневной вес", T.NUMERIC),
@@ -100,6 +101,7 @@ def registry(habit_ids: tuple[int, ...]) -> tuple[Variable, ...]:
                     else "stage4.week_progress (полная календарная неделя)",
                     "not_applicable: вне активности или неприменимое поле; source_missing: нет отметки; "
                     "field_missing: количество не задано; future: будущее наблюдение. "
+                    "completion: done=true, missed/skipped=false; нет отметки не означает false. "
                     "Вес и квота — план. Единица количества берётся из конфигурации даты.",
                     habit_id=habit_id,
                     categories=("done", "missed", "skipped") if name == "status" else ())

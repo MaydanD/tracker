@@ -15,10 +15,11 @@ source of truth for what Tracker will become.
 **UI language: Russian.** All user-facing text, including errors and schedule labels,
 is Russian (PROJECT-SPEC.md §2.1); API fields and codes remain English.
 
-**Current stage: Stage 7B — Descriptive Analytics & Trends.** Read-only typed
-summaries, daily/weekly series, rolling means, period comparisons and descriptive
-directions consume the canonical Stage 7A dataset. Coverage, missingness, partial
-periods and historical quantity units remain explicit. See the
+**Current stage: Stage 7C — Relationships & Correlations.** Read-only same-period
+pair and matrix analysis adds typed coefficients, sample counts and pair coverage
+over Stage 7A data and Stage 7B series. Missingness, partial periods and historical
+quantity units remain explicit. See the
+[relationship contract](docs/analytics-relationships.md),
 [descriptive contract](docs/analytics-descriptive.md),
 [dataset contract](docs/analytics-dataset.md) and
 [Known limitations](#known-limitations).
@@ -52,7 +53,10 @@ periods and historical quantity units remain explicit. See the
   using Stage 4 daily scores.
 - **Descriptive analytics API**: `GET /api/analytics/descriptive` with explicit
   inclusive dates and selected variables; typed summaries, coverage, rolling
-  values and safe comparisons. No analytics UI or relationship analysis yet.
+  values and safe comparisons.
+- **Relationships API**: `GET /api/analytics/relationships` for an explicit pair
+  or up to 24 selected variables; Pearson, Spearman, point-biserial and Phi with
+  pairwise deletion, coverage and typed undefined/unsupported results. No analytics UI.
 - React + TypeScript + Vite shell with working Главная, Итоги дня, Календарь, Habits and Areas
   screens, sidebar navigation for all planned screens, and an always-visible
   backend/health indicator.
@@ -692,7 +696,7 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
   `archived_at`; restore clears it. Stage 4 uses this boundary as documented above.
 - **Full partial-week quota.** Creation or schedule change midweek does not
   prorate a weekly quota; the UI shows the required count explicitly.
-- Still absent: analytics visualizations, relationship analysis, insights,
+- Still absent: analytics visualizations, lag analysis, insights,
   the owl, experiments, records,
   Excel export, restore and the Windows executable.
 - **Backups are minimal on purpose.** One automatic copy per day in
@@ -709,10 +713,10 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
 
 ## Next stage
 
-Stage 7B Descriptive Analytics & Trends is complete. Future consumers can use
-`app.services.descriptive.get_descriptive` or `GET /api/analytics/descriptive`
-for summaries and trends; the [descriptive contract](docs/analytics-descriptive.md)
-defines coverage, sample thresholds, windows, comparison and incomplete periods.
-Stage 7A remains the only analytics data source via `app.services.analytics.get_dataset`
-and `GET /api/analytics/dataset`. Relationship/lag analysis and the analytics UI
-belong to later stages; there are no recommendations or automatic insights.
+Stage 7C Relationships & Correlations is complete. Future consumers can use
+`app.services.relationships.get_relationships` or `GET /api/analytics/relationships`;
+the [relationship contract](docs/analytics-relationships.md) defines methods,
+minimum samples, pairing, coverage, partial periods and unsupported combinations.
+Stage 7A remains the only analytics data source; Stage 7B supplies descriptive
+series and coverage. Stage 7D will add lag analysis separately. Analytics UI,
+recommendations, prediction and automatic insights are not implemented.
