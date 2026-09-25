@@ -15,10 +15,13 @@ source of truth for what Tracker will become.
 **UI language: Russian.** All user-facing text, including errors and schedule labels,
 is Russian (PROJECT-SPEC.md §2.1); API fields and codes remain English.
 
-**Current stage: Stage 7D — Lag Analysis.** Read-only analysis aligns one X/Y
-pair across bounded calendar-day or calendar-week lags and reuses Stage 7C
-statistics. Requested dates belong to Y; positive lag means X earlier than Y.
-Missingness, partial periods and historical quantity units remain explicit. See the
+**Current stage: Stage 7E — Confidence Engine.** Read-only evaluation of how
+well the user's own history supports one Stage 7C/7D association. The target
+period is split into chronological segments; sample size, pair coverage,
+direction consistency, magnitude stability and method agreement produce a
+`preliminary` / `stable` / `well_supported` label with typed caveats — never a
+probability, p-value or causal claim. See the
+[confidence contract](docs/analytics-confidence.md),
 [lag contract](docs/analytics-lags.md),
 [relationship contract](docs/analytics-relationships.md),
 [descriptive contract](docs/analytics-descriptive.md),
@@ -62,6 +65,11 @@ Missingness, partial periods and historical quantity units remain explicit. See 
   offsets (-7 to +7 days or weeks), with automatic source-range extension,
   per-lag coverage and the same Stage 7C methods. One dataset build per scan;
   descriptive associations only, with explicit autocorrelation limitations.
+- **Confidence API**: `GET /api/analytics/confidence` for one X/Y hypothesis
+  (same-period or a single lag, -7..+7). Early/middle/recent segments, explicit
+  evidence metrics, a centralized versioned policy and deterministic caveat
+  codes with Russian labels. One dataset build for the full period and all
+  segments; strength and confidence stay independent.
 - React + TypeScript + Vite shell with working Главная, Итоги дня, Календарь, Habits and Areas
   screens, sidebar navigation for all planned screens, and an always-visible
   backend/health indicator.
@@ -702,7 +710,7 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
 - **Full partial-week quota.** Creation or schedule change midweek does not
   prorate a weekly quota; the UI shows the required count explicitly.
 - Still absent: analytics visualizations, insights,
-  the owl, experiments, records,
+  the owl, experiments, records, confidence UI,
   Excel export, restore and the Windows executable.
 - **Backups are minimal on purpose.** One automatic copy per day in
   `<data dir>/backups`, with a small retention window. There is no restore button,
@@ -718,10 +726,11 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
 
 ## Next stage
 
-Stage 7D Lag Analysis is complete. Future consumers can use
-`app.services.lags.get_lags` or `GET /api/analytics/lags`; the
-[lag contract](docs/analytics-lags.md) defines sign, target/source periods,
-alignment, limits, missingness and autocorrelation caveats. Stage 7A remains
-the only analytics data source, Stage 7B supplies series and coverage, and
-Stage 7C supplies all statistical methods and sample rules. Analytics UI,
+Stage 7E Confidence Engine is complete. Future consumers can use
+`app.services.confidence.get_confidence` or `GET /api/analytics/confidence`; the
+[confidence contract](docs/analytics-confidence.md) defines the evidence model,
+chronological segmentation, policy thresholds, caveat codes and the difference
+between strength and confidence. Stage 7A remains the only analytics data
+source, Stage 7B supplies series and coverage, Stage 7C supplies all statistical
+methods and sample rules, and Stage 7D supplies lag alignment. Analytics UI,
 recommendations, prediction, rankings and automatic insights are not implemented.
