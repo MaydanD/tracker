@@ -15,9 +15,10 @@ source of truth for what Tracker will become.
 **UI language: Russian.** All user-facing text, including errors and schedule labels,
 is Russian (PROJECT-SPEC.md §2.1); API fields and codes remain English.
 
-**Current stage: Stage 6 — Dashboard & Calendar.** Dashboard, current streaks,
-weekly quota progress, yesterday's daily state, monthly calendar with day cards,
-and annual heatmap are fully implemented. See
+**Current stage: Stage 7A — Analytics Dataset.** The canonical read-only daily and
+weekly dataset, typed variable registry, explicit missingness, historical habit
+configuration, and observed-only Daily State summaries are implemented alongside
+the Stage 6 dashboard and calendar. See [dataset contract](docs/analytics-dataset.md) and
 [Known limitations](#known-limitations).
 
 ---
@@ -703,5 +704,8 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
 
 ## Next stage
 
-Stage 6 Dashboard & Calendar is complete. Analytics dataset (Stage 7A) remains
-the next stage; no Stage 7 analytics work is included in this implementation.
+Stage 7A Analytics Dataset is complete. Later Stage 7 work must consume
+`app.services.analytics.get_dataset` or `GET /api/analytics/dataset?start=YYYY-MM-DD&end=YYYY-MM-DD`.
+The [versioned dataset contract](docs/analytics-dataset.md) defines missingness,
+historical configuration, full-week progress versus requested-range observations,
+and query/read-only guarantees. No statistical analytics or analytics UI is included.

@@ -1250,6 +1250,26 @@ Build the analytics engine incrementally.
 
 Do not attempt all statistical functionality in one giant implementation.
 
+#### Реализовано: Stage 7A — Analytics Dataset
+
+Канонический контракт `7A.1` доступен через `app.services.analytics.get_dataset`
+и read-only `GET /api/analytics/dataset?start=YYYY-MM-DD&end=YYYY-MM-DD`.
+Он включает типизированный реестр (`numeric`, `ordinal`, `boolean`, `categorical`),
+дневные и недельные строки, устойчивые ID динамических привычек, причины отсутствия
+значений и исторически корректные конфигурации. Дневные/недельные веса и проценты
+переиспользуют Stage 4; missing, skipped, not applicable, future и no obligations
+сохраняются отдельно. Daily State не теряет различия null/false/0 и независимость
+оценки/длительности сна и использования компьютера.
+
+Недельный прогресс относится к полной календарной неделе, агрегаты наблюдений State —
+только к запрошенным датам до сегодня включительно; оба охвата явно обозначены,
+частичные недели и количество наблюдений доступны потребителю. Будущие наблюдения
+не становятся неудачами. Пакетное чтение не создаёт записей или миграций.
+
+Полное описание ключей, сериализации, missingness, диапазонов и ограничений:
+[контракт Stage 7A](docs/analytics-dataset.md). Это обязательная точка входа для
+Stage 7B+. Статистические методы, инсайты, рекомендации и UI аналитики не реализованы.
+
 ### Stages 8–10
 
 Turn validated analytics into understandable insights, guidance, and personal experiments.

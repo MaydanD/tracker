@@ -1,11 +1,12 @@
 """Bulk-load authoritative data, then delegate all calculations to the domain."""
 
+from collections.abc import Iterable
 from datetime import UTC, date
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import DailyHabitEntry
+from app.db.models import DailyHabitEntry, Habit
 from app.db.queries import load_habits
 from app.domain.progress import HabitHistory, Version
 from app.services.habits import get_habit
@@ -21,8 +22,15 @@ def load_histories(
     statement = select(DailyHabitEntry)
     if habit_id is not None:
         statement = statement.where(DailyHabitEntry.habit_id == habit_id)
+    return histories_from_loaded(habits, session.scalars(statement))
+
+
+def histories_from_loaded(
+    habits: Iterable[Habit], loaded_entries: Iterable[DailyHabitEntry],
+) -> tuple[HabitHistory, ...]:
+    """Shared history adapter, also used by bounded analytics range loading."""
     entries: dict[int, dict[date, str]] = {}
-    for entry in session.scalars(statement):
+    for entry in loaded_entries:
         entries.setdefault(entry.habit_id, {})[entry.entry_date] = entry.status
     histories: list[HabitHistory] = []
     for habit in habits:
