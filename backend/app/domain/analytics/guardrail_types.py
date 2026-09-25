@@ -30,7 +30,10 @@ GuardrailVerdict = Literal["pass", "pass_with_warnings", "blocked", "not_evaluab
 CheckStatus = Literal["passed", "failed", "not_applicable", "not_evaluable"]
 CheckName = Literal["sample_size", "coverage", "group_balance", "effect_size",
                     "weekday_control", "temporal_stability", "multiple_comparisons"]
-FamilyMode = Literal["single", "lag_scan", "matrix"]
+# ``discovery`` is the whole Stage 8 candidate sweep (pairs x lags x directions):
+# one family, one multiplicity correction. Added additively; existing modes are
+# unchanged.
+FamilyMode = Literal["single", "lag_scan", "matrix", "discovery"]
 WeekdayOutcome = Literal["retained", "attenuated", "explained_by_weekday", "reversed",
                          "not_applicable", "not_supported", "insufficient_strata",
                          "not_evaluable"]

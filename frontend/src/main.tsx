@@ -7,6 +7,7 @@ import './styles/layout.css'
 import './styles/ui.css'
 import './styles/dashboard.css'
 import './styles/calendar.css'
+import './styles/insights.css'
 
 const container = document.getElementById('root')
 if (!container) {

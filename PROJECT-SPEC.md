@@ -1268,11 +1268,38 @@ Do not attempt all statistical functionality in one giant implementation.
 
 Полное описание ключей, сериализации, missingness, диапазонов и ограничений:
 [контракт Stage 7A](docs/analytics-dataset.md). Это обязательная точка входа для
-Stage 7B+. Статистические методы, инсайты, рекомендации и UI аналитики не реализованы.
+Stage 7B+. Статистические слои Stage 7 и пользовательский слой Stage 8 описаны
+в отдельных analytics-контрактах; рекомендации не реализованы.
 
 ### Stages 8–10
 
 Turn validated analytics into understandable insights, guidance, and personal experiments.
+
+#### Реализовано: Stage 8 — Insights
+
+Stage 7 dataset → relationships/lags → statistical guardrails с family-level
+BH/FDR → confidence → Stage 8 discovery, gating, deterministic wording и UI.
+Страница `/#/insights` («Аналитика») содержит русскую ленту, фильтры периода,
+подтверждённости, проверок, сферы/показателя и explorer дневной пары. Detail
+сохраняет семантику исходного семейства, показывает evidence, caveats, secondary
+lags, графики и историю; frontend не пересчитывает аналитические значения.
+
+Формулировки — типизированные русские шаблоны без LLM. Confidence, strength и
+admissibility различаются; blocked скрыты по умолчанию, not evaluable не становятся
+preliminary. Same-period пары дедуплицируются, representative lag выбирается
+после общей поправки, положительный lag означает X раньше Y.
+
+API: GET `/api/analytics/insights`, `/variables`, `/{fingerprint}`,
+`/{fingerprint}/history`; POST `/refresh`. GET и reload не создают историю.
+Миграция `b2631e796164` добавляет `insight_snapshots`: stable fingerprint,
+период/evidence/labels, версии политик и шаблона; unique `(fingerprint, evaluated_on)`
+с conflict handling. Повторный идентичный refresh идемпотентен, изменённая оценка
+заменяет снимок за тот же день. История сохраняется после rename/archive.
+
+Граница Stage 8: observational insights; без causal inference, рекомендаций,
+prediction и LLM generation. Полный контракт, политики, API и ограничения:
+[analytics-insights.md](docs/analytics-insights.md).
+
 
 ### Stages 11–13
 

@@ -47,6 +47,12 @@ def test_factory_returns_independent_applications(tmp_path: Path) -> None:
 
 
 EXPECTED_PATHS = {
+    # Stage 8 — insights
+    "/api/analytics/insights",
+    "/api/analytics/insights/variables",
+    "/api/analytics/insights/refresh",
+    "/api/analytics/insights/{fingerprint}",
+    "/api/analytics/insights/{fingerprint}/history",
     "/api/analytics/confidence",
     "/api/analytics/guardrails",
     "/api/analytics/lags",

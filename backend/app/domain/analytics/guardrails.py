@@ -340,7 +340,8 @@ def analyze(dataset: AnalyticsDataset, start: date, end: date, hypotheses: tuple
             status = "failed"
         comparison = MultipleComparisonEvidence(
             family_mode=mode, family_size=len(prepared), tested_size=len(tested),
-            family_rank=ranks.get(index), method="benjamini_hochberg",
+            # A family of one is never ranked: with no correction there is no order.
+            family_rank=ranks.get(index) if checked else None, method="benjamini_hochberg",
             threshold=POLICY.fdr_threshold, status=status, raw_p_value=primary_p,
             adjusted_q_value=q_value, passed=None if status in ("not_applicable", "not_evaluable")
             else status == "passed")

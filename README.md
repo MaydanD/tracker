@@ -15,23 +15,15 @@ source of truth for what Tracker will become.
 **UI language: Russian.** All user-facing text, including errors and schedule labels,
 is Russian (PROJECT-SPEC.md §2.1); API fields and codes remain English.
 
-**Current stage: Stage 7D — Statistical Guardrails.** Read-only admissibility
-checks between the association/lag engines and any future Insights layer:
-minimum sample size, pair coverage, binary group balance, a minimum meaningful
-effect, within-weekday control, Benjamini–Hochberg FDR over one analysis family
-and reuse of the Stage 7E temporal segments. Each hypothesis gets
-`pass` / `pass_with_warnings` / `blocked` / `not_evaluable` with typed reasons,
-and blocked results are reported, never silently dropped. Confidence (Stage 7E)
-answers a different question — how well the user's history supports an
-association — and stays a separate field; p/q values are never probabilities or
-proof of causation. See the
-[guardrail contract](docs/analytics-guardrails.md),
-[confidence contract](docs/analytics-confidence.md),
-[lag contract](docs/analytics-lags.md),
-[relationship contract](docs/analytics-relationships.md),
-[descriptive contract](docs/analytics-descriptive.md),
-[dataset contract](docs/analytics-dataset.md) and
-[Known limitations](#known-limitations).
+**Current stage: Stage 8 — Insights.** The Russian Analytics page at
+`/#/insights` turns Stage 7 evidence into deterministic observations with
+separate confidence and statistical checks, period/visibility filters, charts,
+lag alternatives and persisted evaluation history. Snapshots are written only
+by explicit refresh; reading or reloading the page never writes history.
+No LLM, recommendations, causal inference or prediction.
+See the [Insights contract](docs/analytics-insights.md),
+[guardrails](docs/analytics-guardrails.md) and
+[confidence](docs/analytics-confidence.md).
 
 ---
 
@@ -60,12 +52,15 @@ proof of causation. See the
   a Monday-first monthly calendar with cell scores and mood indicators,
   interactive day cards with direct navigation to «Итоги дня», and an annual heatmap
   using Stage 4 daily scores.
+- **Insights / Analytics**: aggregated discovery, an explicit pair explorer, evidence
+  and caveats, SVG charts and daily history snapshots. `GET /api/analytics/insights`,
+  detail/history/catalogue endpoints and explicit `POST /api/analytics/insights/refresh`.
 - **Descriptive analytics API**: `GET /api/analytics/descriptive` with explicit
   inclusive dates and selected variables; typed summaries, coverage, rolling
   values and safe comparisons.
 - **Relationships API**: `GET /api/analytics/relationships` for an explicit pair
   or up to 24 selected variables; Pearson, Spearman, point-biserial and Phi with
-  pairwise deletion, coverage and typed undefined/unsupported results. No analytics UI.
+  pairwise deletion, coverage and typed undefined/unsupported results. Evidence is exposed through the Insights UI.
 - **Lag analysis API**: `GET /api/analytics/lags` for one X/Y pair and up to 15
   offsets (-7 to +7 days or weeks), with automatic source-range extension,
   per-lag coverage and the same Stage 7C methods. One dataset build per scan;
@@ -721,9 +716,10 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
   `archived_at`; restore clears it. Stage 4 uses this boundary as documented above.
 - **Full partial-week quota.** Creation or schedule change midweek does not
   prorate a weekly quota; the UI shows the required count explicitly.
-- Still absent: analytics visualizations, insights,
-  the owl, experiments, records, confidence UI,
-  Excel export, restore and the Windows executable.
+- Still absent: the owl, experiments, records, recommendation/prediction engines,
+  Excel export, restore and the Windows executable. Insights discovery is bounded;
+  the UI explorer currently selects daily variables. History keeps the latest
+  evaluation per hypothesis per day and returns the latest 200 snapshots.
 - **Backups are minimal on purpose.** One automatic copy per day in
   `<data dir>/backups`, with a small retention window. There is no restore button,
   no integrity report and no monthly snapshot yet (Stage 12).
@@ -744,15 +740,8 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
 
 ## Next stage
 
-Stage 7D Statistical Guardrails are complete. Future consumers can use
-`app.services.guardrails.get_guardrails` or `GET /api/analytics/guardrails` to
-decide whether an association is admissible evidence, and
-`app.services.confidence.get_confidence` for how well the history supports it;
-the [guardrail contract](docs/analytics-guardrails.md) and the
-[confidence contract](docs/analytics-confidence.md) define both policies,
-thresholds, families, caveats and the difference between strength, confidence and
-admissibility. Stage 7A remains the only analytics data source, Stage 7B supplies
-series and coverage, Stage 7C supplies all statistical methods and sample rules,
-Stage 7D supplies lag alignment, and Stage 7E supplies segmentation and stability
-evidence. Insights, recommendations, prediction, rankings, analytics UI and any
-causal claim are not implemented.
+Stage 8 Insights is complete as the user-facing analytics layer. Stage 7 remains
+the source of every statistical value; Stage 8 adds discovery, gating, Russian
+templates, evidence views and history. Later product stages remain separate:
+there is no recommendation engine, causal inference, prediction or LLM generation.
+See [Stage 8 architecture and limitations](docs/analytics-insights.md).

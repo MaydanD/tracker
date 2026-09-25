@@ -97,16 +97,17 @@ describe('App shell', () => {
     expect(screen.getByRole('status')).toHaveTextContent('python -m app')
   })
 
-  it('navigates to a placeholder screen', async () => {
+  it('navigates to the implemented analytics screen', async () => {
     stubHealthyBackend()
 
     render(<App />)
     fireEvent.click(screen.getByRole('link', { name: /инсайты/i }))
 
     expect(
-      await screen.findByRole('heading', { name: 'Инсайты', level: 1 }),
+      await screen.findByRole('heading', { name: 'Аналитика', level: 1 }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Запланировано: Этап 8')).toBeInTheDocument()
+    expect(screen.getByLabelText('Статистические проверки')).toBeInTheDocument()
+    expect(screen.queryByText('Запланировано: Этап 8')).not.toBeInTheDocument()
   })
 
   it('rechecks the backend when asked', async () => {

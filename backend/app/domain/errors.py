@@ -167,3 +167,35 @@ class QuantityNotAllowedError(InvalidConfigurationError):
 class QuantityDecimalNotAllowedError(InvalidConfigurationError):
     code = "quantity_decimal_not_allowed"
     message = "This habit is configured for whole numbers only."
+
+
+# -- insights (Stage 8) -----------------------------------------------------
+
+
+class InsightRequestError(DomainError):
+    """An insight request that is not a valid description of a hypothesis space."""
+
+    code = "invalid_insight_request"
+    status_code = 422
+    message = "The insight request is not valid."
+
+
+class InsightTooLargeError(InsightRequestError):
+    """The requested sweep would exceed the bounded hypothesis budget."""
+
+    code = "insight_request_too_large"
+    message = "Too many hypotheses for one insight sweep."
+
+
+class InsightIdentityMismatchError(InsightRequestError):
+    """A fingerprint that does not describe the requested hypothesis."""
+
+    code = "insight_identity_mismatch"
+    message = "The insight identity does not match the requested hypothesis."
+
+
+class InsightNotFoundError(NotFoundError):
+    """No insight or history exists for that fingerprint."""
+
+    code = "insight_not_found"
+    message = "That insight does not exist."
