@@ -7,15 +7,17 @@ or wall clock is touched. One caller-provided dataset feeds the full period and
 every segment.
 """
 
+from dataclasses import dataclass, replace
 from datetime import date
 from statistics import median
 
 from app.domain.analytics.confidence_types import (
     CAVEAT_ORDER, POLICY, Caveat, CaveatCode, ConfidenceAnalytics, ConfidenceEvidence,
-    ConfidenceLevel, ConfidenceSegment, CoverageEvidence, MethodEvidence, NotEvaluableReason,
-    Policy, RelationToFull, SampleEvidence, SegmentName, StabilityEvidence,
+    ConfidenceLevel, ConfidenceSegment, CoverageEvidence, GuardrailSummary, MethodEvidence,
+    NotEvaluableReason, Policy, RelationToFull, SampleEvidence, SegmentName, StabilityEvidence,
 )
 from app.domain.analytics.descriptive_types import Period
+from app.domain.analytics.lag_types import LagResult
 from app.domain.analytics.lags import (
     analyze as analyze_lag, normalize_lags, request_variables, required_source_range,
 )
@@ -312,9 +314,27 @@ def collect_caveats(relationship: Relationship, sample: SampleEvidence, coverage
     return tuple(Caveat(code, *CAVEATS[code]) for code in CAVEAT_ORDER if code in present)
 
 
-def analyze(dataset: AnalyticsDataset, start: date, end: date, keys: tuple[str, str],
-            lag: int = 0) -> ConfidenceAnalytics:
-    """Evaluate one X/Y hypothesis (same-period when lag is 0) on one dataset."""
+@dataclass(frozen=True)
+class HypothesisEvaluation:
+    """Everything Stage 7E derives for one hypothesis from one dataset.
+
+    Shared with Stage 7D guardrails so segmentation and stability evidence exist
+    exactly once.
+    """
+
+    relationship: LagResult
+    segments: tuple[ConfidenceSegment, ...]
+    sample: SampleEvidence
+    coverage: CoverageEvidence
+    stability: StabilityEvidence
+    methods: MethodEvidence
+    evaluated: bool
+    reason: NotEvaluableReason | None
+
+
+def evaluate_hypothesis(dataset: AnalyticsDataset, start: date, end: date,
+                        keys: tuple[str, str], lag: int = 0) -> HypothesisEvaluation:
+    """Full-period relationship plus chronological segment evidence (no SQL)."""
     request_variables(start, end, keys)
     lag = normalize_lags((lag,))[0]
     known = {variable.key: variable for variable in dataset.variables}
@@ -344,6 +364,31 @@ def analyze(dataset: AnalyticsDataset, start: date, end: date, keys: tuple[str, 
     stability = evaluate_stability(relationship, segments, POLICY)
     methods = evaluate_methods(relationship)
     computed = evaluable(relationship)
+    return HypothesisEvaluation(
+        relationship=relationship, segments=segments, sample=sample, coverage=coverage,
+        stability=stability, methods=methods, evaluated=computed,
+        reason=None if computed else not_evaluable_reason(relationship))
+
+
+def analyze(dataset: AnalyticsDataset, start: date, end: date, keys: tuple[str, str],
+            lag: int = 0, *, guardrail: GuardrailSummary | None = None) -> ConfidenceAnalytics:
+    """Evaluate one X/Y hypothesis (same-period when lag is 0) on one dataset.
+
+    A blocked Stage 7D guardrail never turns a stable association into a broken
+    one: it only removes ``well_supported``, because inadmissible evidence
+    cannot be well supported. Guardrail and confidence remain separate fields.
+    """
+    evaluation = evaluate_hypothesis(dataset, start, end, keys, lag)
+    relationship, segments = evaluation.relationship, evaluation.segments
+    sample, coverage = evaluation.sample, evaluation.coverage
+    stability, methods = evaluation.stability, evaluation.methods
+    x, y, lag = relationship.x, relationship.y, relationship.lag
+    computed = evaluation.evaluated
+    level = classify_confidence(sample, coverage, stability, methods, POLICY) if computed else None
+    capped = bool(guardrail is not None and guardrail.status == "blocked" and level == "well_supported")
+    if capped:
+        level = "stable"
+    summary = replace(guardrail, confidence_capped=capped) if guardrail is not None else None
     return ConfidenceAnalytics(
         contract_version="7E.1", dataset_contract_version=dataset.contract_version,
         confidence_policy_version=POLICY.version, today=dataset.today,
@@ -352,11 +397,11 @@ def analyze(dataset: AnalyticsDataset, start: date, end: date, keys: tuple[str, 
         source_range=Period(dataset.start, dataset.end),
         habit_entry_source_range=Period(week_bounds(dataset.start)[0], week_bounds(dataset.end)[1]),
         status="evaluated" if computed else "not_evaluable",
-        reason=None if computed else not_evaluable_reason(relationship),
-        confidence=classify_confidence(sample, coverage, stability, methods, POLICY) if computed else None,
+        reason=evaluation.reason, confidence=level,
         policy=POLICY, relationship_policy=RELATIONSHIP_POLICY, relationship=relationship,
         evidence=ConfidenceEvidence(sample, coverage, stability, methods),
         segments=segments,
         caveats=collect_caveats(relationship, sample, coverage, stability, methods, POLICY,
                                 evaluated=computed),
+        guardrail=summary,
     )

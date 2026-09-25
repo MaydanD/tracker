@@ -10,7 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.routes import analytics, areas, daily, daily_state, dashboard, descriptive, habits, health, progress
-from app.api.routes import confidence, lags, relationships
+from app.api.routes import confidence, guardrails, lags, relationships
 
 api_router = APIRouter()
 api_router.include_router(health.router)
@@ -25,3 +25,4 @@ api_router.include_router(descriptive.router)
 api_router.include_router(relationships.router)
 api_router.include_router(lags.router)
 api_router.include_router(confidence.router)
+api_router.include_router(guardrails.router)

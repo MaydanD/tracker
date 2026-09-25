@@ -48,6 +48,7 @@ def test_factory_returns_independent_applications(tmp_path: Path) -> None:
 
 EXPECTED_PATHS = {
     "/api/analytics/confidence",
+    "/api/analytics/guardrails",
     "/api/analytics/lags",
     "/api/analytics/descriptive",
     "/api/analytics/relationships",

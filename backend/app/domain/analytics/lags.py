@@ -1,5 +1,6 @@
 """Pure calendar alignment over 7A data / 7B series; statistics remain in 7C."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, fields
 from datetime import date
 
@@ -56,6 +57,32 @@ def request_variables(start: date, end: date, keys: tuple[str, str]) -> tuple[Va
     if unknown:
         raise ValueError("Неизвестные переменные аналитики: " + ", ".join(unknown))
     return known[keys[0]], known[keys[1]]
+
+
+def series_selector(dataset: AnalyticsDataset) -> Callable[[Variable, Period], tuple[SeriesPoint, ...]]:
+    """Cached in-memory 7B projection of one already-loaded dataset.
+
+    Weekly windows always go through 7A slicing so an extended fetch cannot turn
+    a partial requested week into a complete one. Shared with the guardrail layer
+    so both layers pair exactly the same observations for a given lag.
+    """
+    windows: dict[Period, tuple[AnalyticsDataset, dict[date, list]]] = {}
+    series: dict[tuple[str, Period], tuple[SeriesPoint, ...]] = {}
+
+    def selected(variable: Variable, period: Period) -> tuple[SeriesPoint, ...]:
+        if period not in windows:
+            data = slice_dataset(dataset, period.start, period.end)
+            by_week: dict[date, list] = {}
+            for row in data.daily:
+                by_week.setdefault(row.week_start, []).append(row)
+            windows[period] = data, by_week
+        key = (variable.key, period)
+        if key not in series:
+            data, by_week = windows[period]
+            series[key] = make_series(data, variable, by_week)
+        return series[key]
+
+    return selected
 
 
 def shift_date(on: date, lag: int, grain: Grain) -> date:
@@ -116,24 +143,8 @@ def analyze(dataset: AnalyticsDataset, start: date, end: date, keys: tuple[str, 
     if required.start < dataset.start or required.end > dataset.end:
         raise ValueError("Набор данных не покрывает расширенный диапазон сдвигов.")
 
-    # Cache 7B projections in memory. Weekly windows must use 7A slicing so an
-    # extended fetch cannot turn a partial requested week into a complete one.
-    windows = {}
-    series = {}
-
-    def selected(variable: Variable, period: Period) -> tuple[SeriesPoint, ...]:
-        if period not in windows:
-            data = slice_dataset(dataset, period.start, period.end)
-            by_week = {}
-            for row in data.daily:
-                by_week.setdefault(row.week_start, []).append(row)
-            windows[period] = data, by_week
-        key = (variable.key, period)
-        if key not in series:
-            data, by_week = windows[period]
-            series[key] = make_series(data, variable, by_week)
-        return series[key]
-
+    # 7B projections stay in memory; see series_selector for the weekly policy.
+    selected = series_selector(dataset)
     ys = selected(y, target)
     # Daily source points need no reprojection after selection; build once.
     daily_x = selected(x, required) if compatible and x.grain == Grain.DAILY else None

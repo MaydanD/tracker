@@ -1,4 +1,4 @@
-"""One expanded 7A dataset build for the full period and every history segment."""
+"""One expanded 7A dataset build for the full period, every history segment and guardrails."""
 
 from datetime import date
 
@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.domain.analytics.confidence import analyze, split_period
 from app.domain.analytics.confidence_types import ConfidenceAnalytics
 from app.domain.analytics.descriptive_types import Period
+from app.domain.analytics.guardrails import analyze as analyze_guardrails, guardrail_summary
 from app.domain.analytics.lags import normalize_lags, request_variables, required_source_range
 from app.domain.analytics.types import Grain
 from app.services import analytics
@@ -36,4 +37,9 @@ def get_confidence(session: Session, start: date, end: date, x: str, y: str,
     else:
         source = required_source_range_for_scan(period, split_period(period, grain), lag, grain)
     dataset = analytics.get_dataset(session, source.start, source.end, today=today)
-    return analyze(dataset, start, end, (x, y), lag)
+    # Guardrails for the same hypothesis share the same in-memory dataset, so the
+    # confidence response never triggers a second load. Multiplicity control is
+    # not applicable here: the endpoint evaluates exactly one hypothesis.
+    guardrail = guardrail_summary(
+        analyze_guardrails(dataset, start, end, ((x, y, lag),), mode="single"))
+    return analyze(dataset, start, end, (x, y), lag, guardrail=guardrail)

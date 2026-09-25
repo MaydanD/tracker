@@ -166,6 +166,23 @@ class ConfidenceSegment:
 
 
 @dataclass(frozen=True)
+class GuardrailSummary:
+    """Compact Stage 7D guardrail verdict carried by the Stage 7E response.
+
+    Guardrails and confidence stay separate fields: an association can be
+    historically stable and still be inadmissible evidence for a discovery
+    family, or vice versa.
+    """
+
+    policy_version: str
+    status: Literal["pass", "pass_with_warnings", "blocked", "not_evaluable"]
+    family_size: int
+    blocking_reasons: tuple[str, ...]
+    warnings: tuple[str, ...]
+    confidence_capped: bool = False
+
+
+@dataclass(frozen=True)
 class ConfidenceAnalytics:
     contract_version: str
     dataset_contract_version: str
@@ -188,3 +205,4 @@ class ConfidenceAnalytics:
     evidence: ConfidenceEvidence
     segments: tuple[ConfidenceSegment, ...]
     caveats: tuple[Caveat, ...]
+    guardrail: GuardrailSummary | None = None

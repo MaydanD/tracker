@@ -15,12 +15,17 @@ source of truth for what Tracker will become.
 **UI language: Russian.** All user-facing text, including errors and schedule labels,
 is Russian (PROJECT-SPEC.md §2.1); API fields and codes remain English.
 
-**Current stage: Stage 7E — Confidence Engine.** Read-only evaluation of how
-well the user's own history supports one Stage 7C/7D association. The target
-period is split into chronological segments; sample size, pair coverage,
-direction consistency, magnitude stability and method agreement produce a
-`preliminary` / `stable` / `well_supported` label with typed caveats — never a
-probability, p-value or causal claim. See the
+**Current stage: Stage 7D — Statistical Guardrails.** Read-only admissibility
+checks between the association/lag engines and any future Insights layer:
+minimum sample size, pair coverage, binary group balance, a minimum meaningful
+effect, within-weekday control, Benjamini–Hochberg FDR over one analysis family
+and reuse of the Stage 7E temporal segments. Each hypothesis gets
+`pass` / `pass_with_warnings` / `blocked` / `not_evaluable` with typed reasons,
+and blocked results are reported, never silently dropped. Confidence (Stage 7E)
+answers a different question — how well the user's history supports an
+association — and stays a separate field; p/q values are never probabilities or
+proof of causation. See the
+[guardrail contract](docs/analytics-guardrails.md),
 [confidence contract](docs/analytics-confidence.md),
 [lag contract](docs/analytics-lags.md),
 [relationship contract](docs/analytics-relationships.md),
@@ -69,7 +74,14 @@ probability, p-value or causal claim. See the
   (same-period or a single lag, -7..+7). Early/middle/recent segments, explicit
   evidence metrics, a centralized versioned policy and deterministic caveat
   codes with Russian labels. One dataset build for the full period and all
-  segments; strength and confidence stay independent.
+  segments; strength and confidence stay independent. The response also carries
+  the compact guardrail verdict for the same hypothesis.
+- **Guardrails API**: `GET /api/analytics/guardrails` for one hypothesis, one
+  lag family (-7..+7) or a relationship matrix over up to 24 variables. Minimum
+  sample, coverage, group balance, effect threshold, within-weekday control,
+  temporal blocking and Benjamini–Hochberg FDR across the whole analysis family,
+  with per-check statuses, typed blocking reasons and Russian labels. One dataset
+  build per request; blocked hypotheses stay in the response.
 - React + TypeScript + Vite shell with working Главная, Итоги дня, Календарь, Habits and Areas
   screens, sidebar navigation for all planned screens, and an always-visible
   backend/health indicator.
@@ -721,16 +733,26 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
 - Configuration changes cannot be backdated (an edit always takes effect today or
   later); the service layer already accepts an explicit effective date for when
   that becomes useful.
+- **Guardrails cannot turn association into causation.** Statistical guardrails
+  reduce the risk of reading chance or calendar artifacts as evidence, but `pass`
+  is not proof, `p`/`q` are not probabilities that an association is true, and the
+  effect thresholds are product policy rather than a statement about the real
+  world. Weekday control only removes a linear weekday baseline, and low or
+  uneven coverage is reported rather than corrected (Stage 7D).
 - No authentication: the API binds to `127.0.0.1` and is meant for one local user.
 - No log files and no packaging step; run it from source with the commands above.
 
 ## Next stage
 
-Stage 7E Confidence Engine is complete. Future consumers can use
-`app.services.confidence.get_confidence` or `GET /api/analytics/confidence`; the
-[confidence contract](docs/analytics-confidence.md) defines the evidence model,
-chronological segmentation, policy thresholds, caveat codes and the difference
-between strength and confidence. Stage 7A remains the only analytics data
-source, Stage 7B supplies series and coverage, Stage 7C supplies all statistical
-methods and sample rules, and Stage 7D supplies lag alignment. Analytics UI,
-recommendations, prediction, rankings and automatic insights are not implemented.
+Stage 7D Statistical Guardrails are complete. Future consumers can use
+`app.services.guardrails.get_guardrails` or `GET /api/analytics/guardrails` to
+decide whether an association is admissible evidence, and
+`app.services.confidence.get_confidence` for how well the history supports it;
+the [guardrail contract](docs/analytics-guardrails.md) and the
+[confidence contract](docs/analytics-confidence.md) define both policies,
+thresholds, families, caveats and the difference between strength, confidence and
+admissibility. Stage 7A remains the only analytics data source, Stage 7B supplies
+series and coverage, Stage 7C supplies all statistical methods and sample rules,
+Stage 7D supplies lag alignment, and Stage 7E supplies segmentation and stability
+evidence. Insights, recommendations, prediction, rankings, analytics UI and any
+causal claim are not implemented.
