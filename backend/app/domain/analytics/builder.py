@@ -1,6 +1,7 @@
 """Pure dataset preparation. All obligation/score/quota formulas stay in Stage 4."""
 
 from collections.abc import Iterator
+from dataclasses import replace
 from datetime import date
 
 from app.domain.analytics.types import (
@@ -41,6 +42,54 @@ def score_values(progress: Score, grain: Grain, *, future: bool) -> dict[str, Va
         f"{grain.value}.completed_weight": absent(A.FUTURE) if future else Value(progress.completed_weight),
         f"{grain.value}.required_weight": Value(progress.required_weight),
     }
+
+
+def state_week_values(rows: list[DailyRow], today: date) -> dict[str, Value]:
+    """Canonical State aggregation, also used when projecting a dataset range."""
+    elapsed = [row for row in rows if row.date <= today]
+    values: dict[str, Value] = {}
+    for name, _label, kind in STATE_FIELDS:
+        observed = [row.values[f"state.{name}"].value for row in elapsed
+                    if row.values[f"state.{name}"].availability == A.PRESENT]
+        key = f"weekly.state.{name}"
+        values[f"{key}.observed_count"] = Value(len(observed)) if elapsed else absent(A.FUTURE)
+        if kind in (VariableType.NUMERIC, VariableType.ORDINAL):
+            values[f"{key}.mean"] = (Value(sum(observed) / len(observed)) if observed else
+                                     absent(A.NO_OBSERVATIONS if elapsed else A.FUTURE))
+        if kind == VariableType.BOOLEAN:
+            for boolean, suffix in ((True, "true_count"), (False, "false_count")):
+                values[f"{key}.{suffix}"] = (
+                    Value(sum(value is boolean for value in observed)) if elapsed else absent(A.FUTURE))
+    return values
+
+
+def slice_dataset(dataset: AnalyticsDataset, start: date, end: date) -> AnalyticsDataset:
+    """Project loaded 7A rows without loading sources or recalculating Stage 4.
+
+    Weekly progress retains its full calendar-week scope. Weekly State values
+    and requested coverage are recomputed from canonical daily cells only.
+    The registry (including the union of dynamic habits) is preserved.
+    """
+    validate_range(start, end)
+    if start < dataset.start or end > dataset.end:
+        raise ValueError("Диапазон должен находиться внутри набора данных.")
+    daily = tuple(row for row in dataset.daily if start <= row.date <= end)
+    by_week: dict[date, list[DailyRow]] = {}
+    for row in daily:
+        by_week.setdefault(row.week_start, []).append(row)
+    weekly = []
+    for week in dataset.weekly:
+        rows = by_week.get(week.week_start)
+        if not rows:
+            continue
+        weekly.append(replace(
+            week, requested_start=rows[0].date, requested_end=rows[-1].date,
+            requested_days=len(rows),
+            elapsed_requested_days=sum(row.date <= dataset.today for row in rows),
+            partial_requested_week=rows[0].date != week.week_start or rows[-1].date != week.week_end,
+            values={**week.values, **state_week_values(rows, dataset.today)},
+        ))
+    return replace(dataset, start=start, end=end, daily=daily, weekly=tuple(weekly))
 
 
 def build_dataset(data: DatasetInput, start: date, end: date, *, today: date) -> AnalyticsDataset:
@@ -118,18 +167,7 @@ def build_dataset(data: DatasetInput, start: date, end: date, *, today: date) ->
         values = score_values(wp, Grain.WEEKLY, future=future_week)
         iso = start_week.isocalendar()
         values.update({"weekly.iso_week": Value(str(iso.week)), "weekly.iso_year": Value(iso.year)})
-        for name, _label, kind in STATE_FIELDS:
-            observed = [row.values[f"state.{name}"].value for row in elapsed
-                        if row.values[f"state.{name}"].availability == A.PRESENT]
-            key = f"weekly.state.{name}"
-            values[f"{key}.observed_count"] = Value(len(observed)) if elapsed else absent(A.FUTURE)
-            if kind in (VariableType.NUMERIC, VariableType.ORDINAL):
-                values[f"{key}.mean"] = (Value(sum(observed) / len(observed)) if observed else
-                                         absent(A.NO_OBSERVATIONS if elapsed else A.FUTURE))
-            if kind == VariableType.BOOLEAN:
-                for boolean, suffix in ((True, "true_count"), (False, "false_count")):
-                    values[f"{key}.{suffix}"] = (
-                        Value(sum(value is boolean for value in observed)) if elapsed else absent(A.FUTURE))
+        values.update(state_week_values(rows, today))
         progress_by_id = {p.habit_id: p for p in wp.habits}
         for habit in data.habits:
             p = progress_by_id.get(habit.history.habit_id)

@@ -15,10 +15,12 @@ source of truth for what Tracker will become.
 **UI language: Russian.** All user-facing text, including errors and schedule labels,
 is Russian (PROJECT-SPEC.md §2.1); API fields and codes remain English.
 
-**Current stage: Stage 7A — Analytics Dataset.** The canonical read-only daily and
-weekly dataset, typed variable registry, explicit missingness, historical habit
-configuration, and observed-only Daily State summaries are implemented alongside
-the Stage 6 dashboard and calendar. See [dataset contract](docs/analytics-dataset.md) and
+**Current stage: Stage 7B — Descriptive Analytics & Trends.** Read-only typed
+summaries, daily/weekly series, rolling means, period comparisons and descriptive
+directions consume the canonical Stage 7A dataset. Coverage, missingness, partial
+periods and historical quantity units remain explicit. See the
+[descriptive contract](docs/analytics-descriptive.md),
+[dataset contract](docs/analytics-dataset.md) and
 [Known limitations](#known-limitations).
 
 ---
@@ -48,6 +50,9 @@ the Stage 6 dashboard and calendar. See [dataset contract](docs/analytics-datase
   a Monday-first monthly calendar with cell scores and mood indicators,
   interactive day cards with direct navigation to «Итоги дня», and an annual heatmap
   using Stage 4 daily scores.
+- **Descriptive analytics API**: `GET /api/analytics/descriptive` with explicit
+  inclusive dates and selected variables; typed summaries, coverage, rolling
+  values and safe comparisons. No analytics UI or relationship analysis yet.
 - React + TypeScript + Vite shell with working Главная, Итоги дня, Календарь, Habits and Areas
   screens, sidebar navigation for all planned screens, and an always-visible
   backend/health indicator.
@@ -687,8 +692,8 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
   `archived_at`; restore clears it. Stage 4 uses this boundary as documented above.
 - **Full partial-week quota.** Creation or schedule change midweek does not
   prorate a weekly quota; the UI shows the required count explicitly.
-- Still absent: dashboard content,
-  calendar and heatmaps, analytics, insights, the owl, experiments, records,
+- Still absent: analytics visualizations, relationship analysis, insights,
+  the owl, experiments, records,
   Excel export, restore and the Windows executable.
 - **Backups are minimal on purpose.** One automatic copy per day in
   `<data dir>/backups`, with a small retention window. There is no restore button,
@@ -704,8 +709,10 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
 
 ## Next stage
 
-Stage 7A Analytics Dataset is complete. Later Stage 7 work must consume
-`app.services.analytics.get_dataset` or `GET /api/analytics/dataset?start=YYYY-MM-DD&end=YYYY-MM-DD`.
-The [versioned dataset contract](docs/analytics-dataset.md) defines missingness,
-historical configuration, full-week progress versus requested-range observations,
-and query/read-only guarantees. No statistical analytics or analytics UI is included.
+Stage 7B Descriptive Analytics & Trends is complete. Future consumers can use
+`app.services.descriptive.get_descriptive` or `GET /api/analytics/descriptive`
+for summaries and trends; the [descriptive contract](docs/analytics-descriptive.md)
+defines coverage, sample thresholds, windows, comparison and incomplete periods.
+Stage 7A remains the only analytics data source via `app.services.analytics.get_dataset`
+and `GET /api/analytics/dataset`. Relationship/lag analysis and the analytics UI
+belong to later stages; there are no recommendations or automatic insights.
