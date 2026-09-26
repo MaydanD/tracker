@@ -1,6 +1,7 @@
 import { apiRequest } from './client'
 import type { DayItem, HabitStreak, ProgressState } from './types'
 import type { DailyStateRecord } from './dailyState'
+import type { OwlState } from './owl'
 
 export interface DashboardRead {
   today: string
@@ -9,6 +10,8 @@ export interface DashboardRead {
   streaks: HabitStreak[]
   yesterday_state: DailyStateRecord | null
   today_items: DayItem[]
+  /** Stage 9: the single contextual Owl state, or null. */
+  owl: OwlState | null
 }
 
 export function fetchDashboard(signal?: AbortSignal): Promise<DashboardRead> {

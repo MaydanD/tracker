@@ -67,6 +67,7 @@ export function stubHealthyBackend(options: {
         streaks: [],
         yesterday_state: null,
         today_items: [],
+        owl: null,
       })
     }
     return jsonResponse({ error: { code: 'not_found', message: 'No route.' } }, 404)

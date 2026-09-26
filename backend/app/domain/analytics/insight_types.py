@@ -27,6 +27,7 @@ from app.domain.analytics.relationship_types import (
     Direction, Method, Status as RelationshipStatus, Strength,
 )
 from app.domain.analytics.types import Grain, Variable
+from app.domain.owl import OwlState
 
 
 InsightKind = Literal["association"]
@@ -312,6 +313,8 @@ class InsightAnalytics:
     sort_order: tuple[str, ...]
     summary: InsightSummary
     insights: tuple[InsightCandidate, ...]
+    # Stage 9: the one contextual Owl state for the analytics page, or null.
+    owl: OwlState | None = None
 
 
 @dataclass(frozen=True)

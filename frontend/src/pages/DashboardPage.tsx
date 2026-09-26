@@ -1,5 +1,6 @@
 import { fetchDashboard } from '../api/dashboard'
 import { ErrorBanner, LoadingText } from '../components/Feedback'
+import { OwlAssistantBanner } from '../components/owl/OwlAssistantBanner'
 import { statusLabel } from '../components/daily/status'
 import { useAsyncData } from '../hooks/useAsyncData'
 import { formatFullDateLabel, formatShortDateLabel } from '../utils/dateUtils'
@@ -31,7 +32,7 @@ export function DashboardPage() {
     )
   }
 
-  const { today, today_progress, week_progress, streaks, yesterday_state, today_items } = data
+  const { today, today_progress, week_progress, streaks, yesterday_state, today_items, owl } = data
 
   return (
     <section className="page">
@@ -43,6 +44,8 @@ export function DashboardPage() {
         Обзор вашей активности: результаты сегодняшнего дня, прогресс текущей недели,
         серии выполнений и вчерашнее состояние.
       </p>
+
+      <OwlAssistantBanner state={owl} />
 
       <div className="dashboard-grid">
         {/* Card 1: Сегодня */}

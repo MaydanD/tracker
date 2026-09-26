@@ -1300,6 +1300,40 @@ API: GET `/api/analytics/insights`, `/variables`, `/{fingerprint}`,
 prediction и LLM generation. Полный контракт, политики, API и ограничения:
 [analytics-insights.md](docs/analytics-insights.md).
 
+#### Реализовано: Stage 9 — Owl Assistant
+
+Сова — компактный контекстный баннер в верхней части Dashboard и Аналитики,
+а не модальное окно и не витрина. Принимает уже существующие доменные данные и
+возвращает **ровно одно** состояние: подходящий существующий PNG (`owl_pending`,
+`owl_failed`, `owl_all_done`, `owl_insight`, `owl_many_misses`, `owl_record`),
+короткую эмоциональную реплику и точное фактическое объяснение.
+
+Выбор состояния детерминирован и чист: `app.domain.owl` не имеет БД, часов и
+случайности. Правило «после 18:00» получает явный флаг от injected `Clock`;
+настроение/самочувствие передаются значениями, где `null` — «не записано».
+Нет отдельной таблицы истории совы: состояние пересчитывается из Stage 4
+(progress/streaks, включая `streak_summary`), Daily State и Stage 8
+(availability, confidence, guardrails).
+
+Dashboard-сценарии: всё выполнено; неотмеченные после 18:00 (с реальным счётчиком,
+no-entry ≠ failed); явный `missed` важной привычки (сарказм, запрещён при mood/wellbeing
+≤ 2); много пропусков при покрытии ≥ 60 %; оборвавшаяся длинная серия (cautionary);
+новый рекорд серии (≥ 5 и строго выше прошлого максимума); недельный рост/спад
+(минимум 5 дней, покрытие ≥ 60 %, спад > 20 п.п.). Insights-сценарии: no data,
+insufficient data, guardrails blocked (с реальной причиной), preliminary only,
+stable/well_supported и отдельное подчёркивание ненулевого lag в корреляционной
+формулировке. Приоритеты гарантируют одного победителя; контексты Dashboard и
+Insights не смешиваются.
+
+API: поле `owl` добавлено в существующие ответы `GET /api/dashboard` и
+`GET /api/analytics/insights`; dataset повторно не строится и новых SQL-запросов
+на сценарий нет. Anti-spam — client-side: session dismiss по стабильному
+fingerprint и cooldown сарказма ~24 часа. Сарказм допустим только при реальном
+пользовательском действии/провале; отсутствие данных — это не провал.
+
+Миграция не нужна. Полный контракт, таблица приоритетов/ассетов и ограничения:
+[owl-assistant.md](docs/owl-assistant.md).
+
 
 ### Stages 11–13
 

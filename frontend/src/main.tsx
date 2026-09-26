@@ -8,6 +8,7 @@ import './styles/ui.css'
 import './styles/dashboard.css'
 import './styles/calendar.css'
 import './styles/insights.css'
+import './styles/owl.css'
 
 const container = document.getElementById('root')
 if (!container) {

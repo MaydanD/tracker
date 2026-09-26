@@ -1,10 +1,11 @@
 """Dashboard and Calendar read-only aggregation endpoints."""
 
-from datetime import date
+from datetime import date, time
 
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.dependencies import ClockDep, DbSession
+from app.domain.owl import PENDING_HOUR
 from app.schemas.dashboard import CalendarDaySummaryRead, DashboardRead, DayOverviewRead
 from app.services import dashboard as service
 
@@ -19,7 +20,10 @@ router = APIRouter(tags=["dashboard"])
 )
 def read_dashboard(session: DbSession, clock: ClockDep) -> dict[str, object]:
     today = clock.today()
-    return service.get_dashboard_data(session, today=today)
+    # The only rule that needs a wall clock. Derived here from the injected clock
+    # so the Owl domain stays deterministic and testable.
+    after_hours = clock.now().time() >= time(PENDING_HOUR, 0)
+    return service.get_dashboard_data(session, today=today, after_hours=after_hours)
 
 
 @router.get(

@@ -15,15 +15,13 @@ source of truth for what Tracker will become.
 **UI language: Russian.** All user-facing text, including errors and schedule labels,
 is Russian (PROJECT-SPEC.md §2.1); API fields and codes remain English.
 
-**Current stage: Stage 8 — Insights.** The Russian Analytics page at
-`/#/insights` turns Stage 7 evidence into deterministic observations with
-separate confidence and statistical checks, period/visibility filters, charts,
-lag alternatives and persisted evaluation history. Snapshots are written only
-by explicit refresh; reading or reloading the page never writes history.
-No LLM, recommendations, causal inference or prediction.
-See the [Insights contract](docs/analytics-insights.md),
-[guardrails](docs/analytics-guardrails.md) and
-[confidence](docs/analytics-confidence.md).
+**Current stage: Stage 9 — Owl Assistant.** A compact, contextual mascot banner
+sits at the top of the Dashboard and the Analytics page. It shows **exactly one**
+state with a short Russian line and a factual explanation, driven entirely by
+Stage 4 progress/streaks and the Stage 8 availability, confidence and guardrail
+verdicts. Absence of data is never presented as failure, sarcasm is suppressed
+by low mood/wellbeing, and there is **no Owl history table**: the state is
+recomputed from existing data. See the [Owl contract](docs/owl-assistant.md).
 
 ---
 
@@ -55,6 +53,10 @@ See the [Insights contract](docs/analytics-insights.md),
 - **Insights / Analytics**: aggregated discovery, an explicit pair explorer, evidence
   and caveats, SVG charts and daily history snapshots. `GET /api/analytics/insights`,
   detail/history/catalogue endpoints and explicit `POST /api/analytics/insights/refresh`.
+- **Owl assistant**: one contextual `owl` state embedded in the dashboard and insight
+  responses, rendered as a reusable `OwlAssistantBanner` on both pages. Uses the six
+  existing PNGs, keeps a stable fingerprint for session dismiss, and downgrades
+  sarcasm for 24 hours client-side — no new table and no duplicated analytics.
 - **Descriptive analytics API**: `GET /api/analytics/descriptive` with explicit
   inclusive dates and selected variables; typed summaries, coverage, rolling
   values and safe comparisons.
@@ -716,10 +718,13 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
   `archived_at`; restore clears it. Stage 4 uses this boundary as documented above.
 - **Full partial-week quota.** Creation or schedule change midweek does not
   prorate a weekly quota; the UI shows the required count explicitly.
-- Still absent: the owl, experiments, records, recommendation/prediction engines,
+- Still absent: experiments, records, recommendation/prediction engines,
   Excel export, restore and the Windows executable. Insights discovery is bounded;
   the UI explorer currently selects daily variables. History keeps the latest
   evaluation per hypothesis per day and returns the latest 200 snapshots.
+- **The Owl is guidance only.** It selects one deterministic state from existing
+  data, keeps no history, and its sarcasm is a presentation choice behind a
+  client-side cooldown — never a user-facing judgement of the person.
 - **Backups are minimal on purpose.** One automatic copy per day in
   `<data dir>/backups`, with a small retention window. There is no restore button,
   no integrity report and no monthly snapshot yet (Stage 12).
@@ -740,8 +745,10 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
 
 ## Next stage
 
-Stage 8 Insights is complete as the user-facing analytics layer. Stage 7 remains
-the source of every statistical value; Stage 8 adds discovery, gating, Russian
-templates, evidence views and history. Later product stages remain separate:
-there is no recommendation engine, causal inference, prediction or LLM generation.
+Stage 9 Owl is complete as the contextual assistant layer. Stage 4 remains the
+source of progress and streaks, and Stage 8 remains the source of every
+statistical value; the Owl only selects and renders one state. Later product
+stages remain separate: there is no recommendation engine, causal inference,
+prediction or LLM generation. See
+[Stage 9 architecture](docs/owl-assistant.md).
 See [Stage 8 architecture and limitations](docs/analytics-insights.md).

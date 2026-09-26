@@ -7,6 +7,7 @@
  */
 
 import { apiRequest } from './client'
+import type { OwlState } from './owl'
 
 // --- vocabulary ----------------------------------------------------------------------
 
@@ -310,6 +311,8 @@ export interface InsightAnalyticsRead {
   sort_order: string[]
   summary: InsightSummaryRead
   insights: InsightCandidateRead[]
+  /** Stage 9: the single contextual Owl state, or null. */
+  owl: OwlState | null
 }
 
 export interface InsightChartPointRead {

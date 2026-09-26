@@ -1,0 +1,74 @@
+/* Stage 9 Owl: a compact, non-modal context banner above the page cards. */
+
+.owl-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  max-width: 960px;
+}
+
+/* Tone only tints the accent; the text always carries the meaning. */
+.owl-banner--celebratory {
+  border-left-color: var(--status-healthy);
+}
+
+.owl-banner--supportive,
+.owl-banner--neutral {
+  border-left-color: var(--color-accent);
+}
+
+.owl-banner--cautionary {
+  border-left-color: var(--status-degraded);
+}
+
+.owl-banner--sarcastic {
+  border-left-color: var(--status-offline);
+}
+
+/* Fixed height, automatic width: the sticker keeps its own aspect ratio. */
+.owl-banner__image {
+  flex: none;
+  height: 72px;
+  width: auto;
+  max-width: 120px;
+  border-radius: 6px;
+}
+
+.owl-banner__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.owl-banner__lead {
+  font-weight: 600;
+}
+
+.owl-banner__fact {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.owl-banner__dismiss {
+  flex: none;
+  align-self: flex-start;
+}
+
+@media (max-width: 520px) {
+  .owl-banner {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .owl-banner__image {
+    height: 56px;
+    max-width: 90px;
+  }
+}

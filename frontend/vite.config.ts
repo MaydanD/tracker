@@ -20,6 +20,9 @@ export default defineConfig(() => {
       proxy: {
         '/api': { target: apiTarget, changeOrigin: true },
       },
+      // The six canonical Owl PNGs live once in the repository `owl/` directory,
+      // one level above this project, and are imported (never copied).
+      fs: { allow: ['..'] },
     },
     build: {
       outDir: 'dist',

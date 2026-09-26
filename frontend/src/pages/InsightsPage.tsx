@@ -14,6 +14,7 @@ import type {
   InsightQuery,
 } from '../api/insights'
 import { EmptyState, ErrorBanner, InfoBanner, LoadingText } from '../components/Feedback'
+import { OwlAssistantBanner } from '../components/owl/OwlAssistantBanner'
 import { InsightCard } from '../components/insights/InsightCard'
 import { InsightDetail } from '../components/insights/InsightDetail'
 import { InsightFilters } from '../components/insights/InsightFilters'
@@ -187,6 +188,8 @@ export function InsightsPage({ today: pinnedToday }: Props = {}) {
         Связи в ваших данных: что видно в истории, насколько это подтверждено и какие
         ограничения у каждого наблюдения.
       </p>
+
+      <OwlAssistantBanner state={analytics?.owl ?? null} />
 
       <InsightFilters
         state={{ ...filters, start: range.start, end: range.end }}

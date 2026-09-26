@@ -409,6 +409,7 @@ export function analyticsPayload(
       },
     },
     insights,
+    owl: null,
     ...overrides,
   }
 }

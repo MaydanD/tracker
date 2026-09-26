@@ -4,6 +4,7 @@ from datetime import date
 
 from pydantic import BaseModel, ConfigDict
 
+from app.domain.owl import OwlState
 from app.schemas.daily import DayItemRead
 from app.schemas.daily_state import DailyStateRead
 from app.schemas.progress import DayProgressRead, StreakRead, WeekProgressRead
@@ -20,6 +21,8 @@ class DashboardRead(ReadModel):
     streaks: list[StreakRead]
     yesterday_state: DailyStateRead | None
     today_items: list[DayItemRead]
+    # Stage 9: the one contextual Owl state for the dashboard, or null.
+    owl: OwlState | None = None
 
 
 class CalendarDaySummaryRead(ReadModel):

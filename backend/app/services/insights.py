@@ -42,7 +42,9 @@ from app.domain.errors import (
     InsightIdentityMismatchError, InsightNotFoundError, InsightRequestError,
     InsightTooLargeError,
 )
+from app.domain.owl import OwlState
 from app.services import analytics
+from app.services import owl as owl_service
 
 
 CONTRACT_VERSION = "8A.1"
@@ -363,8 +365,22 @@ def _first_seen(session: Session) -> dict[str, date]:
     return {fingerprint: first for fingerprint, first in rows}
 
 
+def _owl(evaluated: Evaluated, summary: InsightSummary,
+         insights: tuple[InsightCandidate, ...]) -> OwlState | None:
+    """The one Owl state for this already-built payload; no extra dataset."""
+
+    hypotheses = evaluated.result.hypotheses if evaluated.result is not None else ()
+    blocked = next((item for item in hypotheses if item.verdict == "blocked"), None)
+    blocked_reason = (blocked.blocking_reasons[0].message
+                      if blocked is not None and blocked.blocking_reasons else None)
+    max_sample_n = max((item.sample.n for item in hypotheses), default=0)
+    return owl_service.insights_owl(summary, insights, blocked_reason=blocked_reason,
+                                    max_sample_n=max_sample_n)
+
+
 def _analytics(evaluated: Evaluated, request: InsightRequest, *, today: date,
-               summary: InsightSummary, insights: tuple[InsightCandidate, ...]) -> InsightAnalytics:
+               summary: InsightSummary, insights: tuple[InsightCandidate, ...],
+               owl: OwlState | None = None) -> InsightAnalytics:
     from app.domain.analytics.descriptive_types import Period
     from app.domain.analytics.insight_types import SORT_ORDER
 
@@ -382,7 +398,7 @@ def _analytics(evaluated: Evaluated, request: InsightRequest, *, today: date,
         source_range=Period(getattr(dataset, "start"), getattr(dataset, "end")),
         lags=evaluated.lags, include_hidden=request.include_hidden,
         discovery_policy=DISCOVERY_POLICY, sort_order=SORT_ORDER,
-        summary=summary, insights=insights)
+        summary=summary, insights=insights, owl=owl)
 
 
 def _confidence_policy_version(evaluated: Evaluated) -> str:
@@ -396,13 +412,16 @@ def get_insights(session: Session, request: InsightRequest, *, today: date) -> I
 
     evaluated = evaluate(session, request, today=today)
     if evaluated.result is None:
-        return _analytics(evaluated, request, today=today, summary=_empty_summary(), insights=())
+        empty = _empty_summary()
+        return _analytics(evaluated, request, today=today, summary=empty, insights=(),
+                          owl=_owl(evaluated, empty, ()))
     summary, insights = build_feed(
         evaluated.dataset, request.start, request.end, evaluated.result, mode=evaluated.mode,
         labels=evaluated.labels, first_seen=_first_seen(session),
         include_hidden=request.include_hidden, confidence_filter=request.confidence,
         verdict_filter=request.verdicts, variable_filter=_display_filter(request))
-    return _analytics(evaluated, request, today=today, summary=summary, insights=insights)
+    return _analytics(evaluated, request, today=today, summary=summary, insights=insights,
+                      owl=_owl(evaluated, summary, insights))
 
 
 def _locate(evaluated: Evaluated, key_x: str, key_y: str, lag: int):
@@ -523,9 +542,10 @@ def refresh(session: Session, request: InsightRequest, *, today: date) -> Insigh
                         confidence=None, verdicts=None, variables=None)
     evaluated = evaluate(session, discovery, today=today)
     if evaluated.result is None:
+        empty = _empty_summary()
         return InsightRefreshResult(
-            analytics=_analytics(evaluated, discovery, today=today, summary=_empty_summary(),
-                                 insights=()),
+            analytics=_analytics(evaluated, discovery, today=today, summary=empty,
+                                 insights=(), owl=_owl(evaluated, empty, ())),
             snapshots=InsightSnapshotSummary(evaluated_on=today, created=0, updated=0,
                                               unchanged=0, total=0))
     first_seen = _first_seen(session)
@@ -565,7 +585,7 @@ def refresh(session: Session, request: InsightRequest, *, today: date) -> Insigh
     session.commit()
     return InsightRefreshResult(
         analytics=_analytics(evaluated, discovery, today=today, summary=summary,
-                             insights=insights),
+                             insights=insights, owl=_owl(evaluated, summary, insights)),
         snapshots=InsightSnapshotSummary(evaluated_on=today, created=created, updated=updated,
                                         unchanged=unchanged,
                                         total=len(snapshots_candidates)))

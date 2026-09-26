@@ -98,6 +98,7 @@ function mockDashboardData(overrides: Record<string, unknown> = {}) {
         },
       },
     ],
+    owl: null,
     ...overrides,
   }
 }
@@ -154,5 +155,34 @@ describe('DashboardPage', () => {
     render(<DashboardPage />)
 
     expect(await screen.findByText('Состояние вчера не заполнено')).toBeInTheDocument()
+  })
+
+  it('shows the contextual Owl banner above the cards', async () => {
+    stubApi({
+      'GET /api/dashboard': () =>
+        jsonResponse(mockDashboardData({
+          owl: {
+            owl_id: 'all_completed',
+            asset_key: 'owl_all_done',
+            tone: 'celebratory',
+            priority: 70,
+            caption_line1: 'Ну вот. Можешь жить.',
+            caption_line2: 'Все обязательные привычки на сегодня выполнены — 100%.',
+            dismissible: true,
+            fingerprint: 'abc123',
+            context: 'dashboard',
+            fallback_line1: null,
+          },
+        })),
+    })
+
+    render(<DashboardPage />)
+
+    const banner = await screen.findByTestId('owl-banner')
+    expect(within(banner).getByText('Ну вот. Можешь жить.')).toBeInTheDocument()
+    expect(
+      within(banner).getByText('Все обязательные привычки на сегодня выполнены — 100%.'),
+    ).toBeInTheDocument()
+    expect(within(banner).getByRole('img', { name: 'Сова-помощник' })).toBeInTheDocument()
   })
 })

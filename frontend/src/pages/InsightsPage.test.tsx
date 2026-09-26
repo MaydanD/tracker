@@ -422,3 +422,30 @@ describe('InsightsPage', () => {
     await screen.findByRole('alert')
     expect(screen.queryByText(/устойчиво повторяется/)).not.toBeInTheDocument()
   })
+
+  it('shows the contextual Owl banner above the analytics controls', async () => {
+    stubApi({
+      'GET /api/analytics/insights/variables': () => jsonResponse(cataloguePayload()),
+      'GET /api/analytics/insights': () =>
+        jsonResponse(analyticsPayload([MAIN], {
+          owl: {
+            owl_id: 'stable_insight',
+            asset_key: 'owl_insight',
+            tone: 'neutral',
+            priority: 40,
+            caption_line1: 'Так. А вот это уже интересно.',
+            caption_line2: MAIN.text.full,
+            dismissible: true,
+            fingerprint: 'fp-insight',
+            context: 'insights',
+            fallback_line1: null,
+          },
+        })),
+    })
+    render(<InsightsPage today={TODAY} />)
+
+    const banner = await screen.findByTestId('owl-banner')
+    expect(within(banner).getByText('Так. А вот это уже интересно.')).toBeInTheDocument()
+    expect(within(banner).getByRole('img', { name: 'Сова-помощник' })).toBeInTheDocument()
+    expect(document.body.textContent).not.toContain('owl_insight')
+  })
