@@ -1,5 +1,11 @@
 /* Product UI: toolbars, forms, lists and history. Plain CSS on purpose. */
 
+.data-settings { display: flex; flex-direction: column; gap: 18px; }
+.data-settings .card { width: 100%; }
+.data-count { display: flex; justify-content: space-between; gap: 16px; max-width: 400px; }
+.data-count dd { font-variant-numeric: tabular-nums; }
+.restore-confirm { border: 2px solid var(--color-accent); padding: 16px; border-radius: var(--radius); }
+
 /* -- layout helpers --------------------------------------------------------- */
 
 .toolbar {

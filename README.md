@@ -15,7 +15,14 @@ source of truth for what Tracker will become.
 **UI language: Russian.** All user-facing text, including errors and schedule labels,
 is Russian (PROJECT-SPEC.md §2.1); API fields and codes remain English.
 
-**Current stage: Stage 11 — Records & Achievements.** Tracker now derives
+**Current stage: Stage 12 — Backup / Export / Restore.** Settings (`/#/settings`)
+now downloads a complete versioned logical backup and separate JSON/CSV exports.
+Restore validates and previews the file, requires explicit confirmation, retains
+a safety copy and atomically replaces all user data. Configuration history,
+insight snapshots, experiments, IDs and timestamps survive the round trip.
+See the [backup format, limits and recovery guide](docs/backup.md).
+
+Stage 11 derives
 personal records and milestone achievements from the history it already holds: the
 longest habit streak, the best day and completed week, the most habits done in a
 day and the most consistent month per habit, plus a short static catalogue of real
@@ -31,6 +38,8 @@ and the [Owl contract](docs/owl-assistant.md) still hold.
 
 ## What works today
 
+- Full logical ZIP backup v1; readable JSON and seven-table CSV ZIP exports;
+  validation/preview and confirmed transactional full replacement in Settings.
 - FastAPI backend with an application factory, typed settings, logging and one
   consistent error format.
 - `GET /api/health` (liveness) and `GET /api/ready` (real database check).
@@ -669,7 +678,8 @@ the newest records or capture a torn page. Going through a SQLite connection
 takes a consistent snapshot instead, including committed WAL content, while the
 application holds the file open.
 
-It is deliberately minimal: no scheduler, no cloud, no restore UI. A small
+This raw SQLite mechanism is deliberately minimal: no scheduler or cloud; the
+Stage 12 UI restores logical ZIP backups, not these `.db` files. A small
 retention window keeps the most recent automatic backups and never touches files
 it did not create. In-memory databases, the `test` environment and a database that
 does not exist yet are skipped, so a test run cannot litter real files.
@@ -744,16 +754,18 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
   `archived_at`; restore clears it. Stage 4 uses this boundary as documented above.
 - **Full partial-week quota.** Creation or schedule change midweek does not
   prorate a weekly quota; the UI shows the required count explicitly.
-- Still absent: recommendation/prediction engines, Excel export, restore and the
+- Still absent: recommendation/prediction engines, native `.xlsx` export and the
   Windows executable. Insights discovery is bounded;
   the UI explorer currently selects daily variables. History keeps the latest
   evaluation per hypothesis per day and returns the latest 200 snapshots.
 - **The Owl is guidance only.** It selects one deterministic state from existing
   data, keeps no history, and its sarcasm is a presentation choice behind a
   client-side cooldown — never a user-facing judgement of the person.
-- **Backups are minimal on purpose.** One automatic copy per day in
-  `<data dir>/backups`, with a small retention window. There is no restore button,
-  no integrity report and no monthly snapshot yet (Stage 12).
+- **Backups stay local.** Logical restore supports full replacement only, with
+  64 MiB upload / 256 MiB expanded limits (configurable). Safety copies are retained
+  in `<data dir>/backups` until manually removed. Existing daily startup SQLite
+  copies retain their own small retention window. No cloud, encryption, monthly
+  snapshots or scheduled logical backups. Details: [backup.md](docs/backup.md).
 - Habits cannot be reordered manually, and there is no bulk edit.
 - A daily entry cannot be backdated: the habit must already have existed on the
   date you record. Configuration changes likewise cannot be backdated.
@@ -771,13 +783,16 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
 
 ## Next stage
 
-Stage 11 Records & Achievements is complete as a derived long-term-progress layer:
+Stage 12 Backup / Export / Restore is implemented; the official format is logical
+ZIP v1, with validation, explicit confirmation and atomic full replacement.
+Desktop packaging is deferred beyond Stage 12. Stage 13 focuses on hardening;
+packaging requires its own tested scope. Stage 11 remains a derived long-term-progress layer:
 personal records and milestone achievements are computed from the current history,
 never stored. Stage 4 remains the source of progress and streaks, Stage 7A the
 canonical dataset, and Stage 8 the source of every statistical value. Later product
 stages remain separate: there is no causal inference, no significance engine for
-experiments, no recommendations, prediction or LLM generation. Stage 12 covers full
-backup/export and desktop packaging. See
+experiments, no recommendations, prediction or LLM generation. See
+[Stage 12 format and recovery](docs/backup.md),
 [Stage 11 architecture](docs/records.md),
 [Stage 10 architecture](docs/experiments.md),
 [Stage 9 architecture](docs/owl-assistant.md) and

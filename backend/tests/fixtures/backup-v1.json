@@ -1,0 +1,155 @@
+{
+  "manifest": {
+    "format": "tracker-backup",
+    "version": 1,
+    "created_at": "2026-09-26T16:00:00",
+    "alembic_revision": "c3f1a7b24d90",
+    "application_backup_version": 1,
+    "counts": {
+      "areas": 1,
+      "habits": 1,
+      "habit_versions": 2,
+      "habit_entries": 1,
+      "daily_states": 1,
+      "experiments": 1,
+      "insight_snapshots": 1
+    }
+  },
+  "data": {
+    "areas": [
+      {
+        "id": 1,
+        "created_at": "2026-09-01T12:00:00.123456",
+        "updated_at": "2026-09-01T12:00:00.123456",
+        "is_archived": false,
+        "archived_at": null,
+        "name": "Здоровье",
+        "color": "#2f9e5f"
+      }
+    ],
+    "habits": [
+      {
+        "id": 1,
+        "created_at": "2026-09-01T12:00:00.123456",
+        "updated_at": "2026-09-01T12:00:00.123456",
+        "is_archived": false,
+        "archived_at": null
+      }
+    ],
+    "habit_versions": [
+      {
+        "id": 1,
+        "created_at": "2026-09-01T12:00:00.123456",
+        "habit_id": 1,
+        "version_number": 1,
+        "effective_from": "2026-09-01",
+        "name": "Прогулка",
+        "description": null,
+        "area_id": 1,
+        "weight": 1,
+        "tracking_mode": "binary_quantity",
+        "quantity_unit": "км",
+        "quantity_allows_decimal": true,
+        "schedule_type": "daily",
+        "schedule_weekdays": null,
+        "schedule_times_per_week": null
+      },
+      {
+        "id": 2,
+        "created_at": "2026-09-01T12:00:00.123456",
+        "habit_id": 1,
+        "version_number": 2,
+        "effective_from": "2026-09-08",
+        "name": "Прогулка",
+        "description": null,
+        "area_id": 1,
+        "weight": 3,
+        "tracking_mode": "binary_quantity",
+        "quantity_unit": "км",
+        "quantity_allows_decimal": true,
+        "schedule_type": "times_per_week",
+        "schedule_weekdays": null,
+        "schedule_times_per_week": 3
+      }
+    ],
+    "habit_entries": [
+      {
+        "id": 1,
+        "created_at": "2026-09-01T12:00:00.123456",
+        "updated_at": "2026-09-01T12:00:00.123456",
+        "habit_id": 1,
+        "entry_date": "2026-09-02",
+        "status": "done",
+        "quantity_value_micro": 6400000,
+        "skip_reason": null,
+        "note": "Точно 6,4 км"
+      }
+    ],
+    "daily_states": [
+      {
+        "id": 1,
+        "created_at": "2026-09-01T12:00:00.123456",
+        "updated_at": "2026-09-01T12:00:00.123456",
+        "state_date": "2026-09-02",
+        "mood": 3,
+        "energy": null,
+        "wellbeing": 5,
+        "sleep_status": "normal",
+        "sleep_minutes": 480,
+        "alcohol": false,
+        "alcohol_detail": null,
+        "gaming": false,
+        "gaming_minutes": 0,
+        "computer_overuse": null,
+        "computer_minutes": null,
+        "note": null
+      }
+    ],
+    "experiments": [
+      {
+        "id": 1,
+        "created_at": "2026-09-01T12:00:00.123456",
+        "updated_at": "2026-09-01T12:00:00.123456",
+        "title": "Прогулки по утрам",
+        "hypothesis": "Будет больше энергии",
+        "protocol": "Выходить до завтрака",
+        "start_date": "2026-09-01",
+        "end_date": "2026-09-14",
+        "cancelled_on": "2026-09-10"
+      }
+    ],
+    "insight_snapshots": [
+      {
+        "id": 1,
+        "created_at": "2026-09-01T12:00:00.123456",
+        "updated_at": "2026-09-01T12:00:00.123456",
+        "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "evaluated_on": "2026-09-20",
+        "period_start": "2026-09-01",
+        "period_end": "2026-09-20",
+        "x_key": "state.energy",
+        "y_key": "state.mood",
+        "x_label": "Энергия",
+        "y_label": "Настроение",
+        "grain": "daily",
+        "lag": 0,
+        "lag_unit": null,
+        "orientation": "same_period",
+        "relationship_method": "pearson",
+        "coefficient": 0.4567890123456789,
+        "n": 20,
+        "pair_coverage": 0.9,
+        "confidence": "stable",
+        "guardrail_verdict": "pass",
+        "presentation_status": "stable",
+        "blocking_reasons": [],
+        "warnings": [],
+        "statement": "Наблюдалась связь.",
+        "insight_policy_version": "1",
+        "guardrail_policy_version": "1",
+        "confidence_policy_version": "1",
+        "template_version": "1"
+      }
+    ]
+  }
+}

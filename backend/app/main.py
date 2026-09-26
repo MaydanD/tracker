@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import secrets
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -110,6 +111,7 @@ def create_app(settings: Settings | None = None, *, clock: Clock | None = None) 
             allow_credentials=False,
             allow_methods=["*"],
             allow_headers=["*"],
+            expose_headers=["Content-Disposition"],
         )
 
     # Bound on app.state before startup so dependencies resolve even when the
@@ -117,6 +119,8 @@ def create_app(settings: Settings | None = None, *, clock: Clock | None = None) 
     app.state.settings = settings
     app.state.clock = clock if clock is not None else SYSTEM_CLOCK
     app.state.database = create_database(settings)
+    # Restarting the process requires a new preview, no persistent tokens.
+    app.state.backup_signing_key = secrets.token_bytes(32)
 
     register_exception_handlers(app)
     app.include_router(api_router, prefix=settings.api_prefix)

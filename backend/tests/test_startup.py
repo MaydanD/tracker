@@ -91,6 +91,12 @@ EXPECTED_PATHS = {
     "/api/experiments/{experiment_id}/cancel",
     # Stage 11 — records & achievements
     "/api/records",
+    # Stage 12 — data portability
+    "/api/backup",
+    "/api/backup/validate",
+    "/api/backup/restore",
+    "/api/export/json",
+    "/api/export/csv",
 }
 
 

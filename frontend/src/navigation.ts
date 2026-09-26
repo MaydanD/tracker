@@ -64,7 +64,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   {
     path: '/settings',
     label: 'Настройки',
-    summary: 'Хранение данных, резервные копии, экспорт в Excel и восстановление.',
+    summary: 'Резервные копии, экспорт JSON и CSV, проверка и восстановление данных.',
     plannedIn: 'Этап 12',
   },
 ]

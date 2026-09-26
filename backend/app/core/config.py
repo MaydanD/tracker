@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     # Reserved for the portable Windows build (data next to the executable).
     portable: bool = False
 
+    # Logical backup upload and expanded JSON limits (bytes).
+    backup_max_upload_bytes: int = Field(default=64 * 1024 * 1024, ge=1024)
+    backup_max_uncompressed_bytes: int = Field(default=256 * 1024 * 1024, ge=1024)
+
     # Logging
     log_level: str = "INFO"
 

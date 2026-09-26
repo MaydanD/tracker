@@ -1122,17 +1122,33 @@ Behaviour:
   a valid-looking name would both look like a real backup and suppress the retry;
 - a failure is logged explicitly and never prevents the application from starting.
 
-### 23.2 Full backup system
+### 23.2 Logical backup and restore (implemented in Stage 12)
 
-Later add:
+Official format: ZIP with `manifest.json` and `data.json`, `format=tracker-backup`,
+`version=1`. Includes all seven persistent user entities: Areas, Habits,
+HabitVersion, DailyHabitEntry, DailyState, Experiment, InsightSnapshot. Preserve
+IDs, relationships, configuration history, nulls, exact millionths and timestamps.
+Exclude infrastructure metadata, secrets, paths, derived records/achievements,
+analytics aggregates and browser Owl state.
 
-- a real retention policy (recent daily backups, monthly long-term snapshots);
-- integrity checks;
-- restore workflow.
+Settings provides download → select → validate/preview → separate destructive
+confirmation. Restore is full replacement, one transaction with foreign keys on;
+before deletion retain a durable logical safety copy. Any database failure rolls
+back all writes. The app reloads after success. Seven batched read queries; writes
+in batches of 1000. Strict version dispatch, DTO and relation validation, ZIP/JSON
+corruption and file/path checks, 64 MiB upload / 256 MiB expanded limits configurable
+in Settings environment. No migration: `c3f1a7b24d90` stays head.
 
-### 23.3 Excel export
+API: `GET /api/backup`, `POST /api/backup/validate`, `POST /api/backup/restore`,
+`GET /api/export/json`, `GET /api/export/csv`. Contract and limitations:
+[docs/backup.md](docs/backup.md). No cloud, merge, encryption, scheduled logical
+backups, history table or desktop packaging in Stage 12.
 
-Provide a human-readable `.xlsx` export.
+### 23.3 Readable export and future Excel output
+
+Stage 12 provides structured JSON and ZIP containing seven UTF-8 CSV source
+tables (headers, ISO dates, empty nulls, true/false booleans). These are separate
+from the official restorable backup. A native human-readable `.xlsx` is deferred.
 
 Suggested sheets:
 
@@ -1249,7 +1265,7 @@ Do not treat packaging as a trivial final command.
 | **9 — Owl** | Persistent data-backed owl, slippage detection, prioritization, sarcastic commentary without fabricated facts |
 | **10 — Experiments** | Experiment CRUD, before/during/after comparison, state and habit outcomes |
 | **11 — Records & Achievements** ✅ | Implemented: derived personal records (longest streak, best day, best week, most completed, per-habit consistency), a static 17-entry achievement catalogue with real historical dates and locked-progress, `GET /api/records`, a compact dashboard preview and Owl record celebration. No persistence, no migration. Semantics: §20.1. |
-| **12 — Full Backup / Export / Desktop Packaging** | Backup retention, integrity checks, restore, Excel export, pywebview, PyInstaller Windows build |
+| **12 — Backup / Export / Restore** ✅ | Logical backup v1 of all seven source entities, JSON and CSV ZIP export, strict validation and preview, explicit confirmation, atomic full replace with safety copy, Settings UI. No migration. See §23 and docs/backup.md. |
 | **13 — Hardening** | Migration safety, corruption handling, performance profiling, analytics edge cases, packaging edge cases, UI polish |
 
 ---
@@ -1432,9 +1448,13 @@ Dashboard, полностью на русском, только CSS без но�
 приоритет 60) — ниже execution failures. Полный контракт:
 [records.md](docs/records.md).
 
-### Stages 11–13
+### Stage 12 — implemented; Stage 13 — next
 
-Add long-term polish, records, exports, packaging, reliability, and hardening.
+Stage 12 implements local backup/export/restore as specified in §23. Frozen v1
+compatibility, two-database roundtrip, replacement, real late-constraint rollback,
+and records/configuration/experiment regressions are integration-tested.
+Stage 13 covers hardening and reliability. Desktop packaging remains separately
+deferred; it is not part of the completed Stage 12 scope.
 
 ---
 
