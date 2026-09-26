@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { jsonResponse, stubApi } from '../test/fetchStub'
+import { recordsPreviewFixture } from '../test/recordsFixture'
 import { DashboardPage } from './DashboardPage'
 
 const TODAY = '2026-09-25'
@@ -99,6 +100,7 @@ function mockDashboardData(overrides: Record<string, unknown> = {}) {
       },
     ],
     owl: null,
+    records: null,
     ...overrides,
   }
 }
@@ -155,6 +157,33 @@ describe('DashboardPage', () => {
     render(<DashboardPage />)
 
     expect(await screen.findByText('Состояние вчера не заполнено')).toBeInTheDocument()
+  })
+
+  it('shows a compact records preview with a link to all records', async () => {
+    stubApi({
+      'GET /api/dashboard': () => jsonResponse(mockDashboardData({
+        records: recordsPreviewFixture(),
+      })),
+    })
+
+    render(<DashboardPage />)
+
+    const region = await screen.findByRole('region', { name: 'Рекорды' })
+    expect(within(region).getByText('Чтение — 28 дней')).toBeInTheDocument()
+    expect(within(region).getByText(/Месяц без отрыва/)).toBeInTheDocument()
+    expect(within(region).getByText('4 из 12')).toBeInTheDocument()
+    expect(within(region).getByRole('link', { name: 'Все рекорды →' })).toHaveAttribute(
+      'href', '#/records',
+    )
+  })
+
+  it('hides the records preview when the backend sends none', async () => {
+    stubApi({ 'GET /api/dashboard': () => jsonResponse(mockDashboardData()) })
+
+    render(<DashboardPage />)
+
+    expect(await screen.findByRole('heading', { name: 'Главный обзор' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Рекорды' })).toBeNull()
   })
 
   it('shows the contextual Owl banner above the cards', async () => {

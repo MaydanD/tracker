@@ -9,8 +9,10 @@ from app.db.models.daily_state import DailyState
 from app.domain.progress import Streak, day_progress, streak_summary, week_progress
 from app.schemas.daily import DayItemRead
 from app.schemas.daily_state import DailyStateRead
+from app.schemas.records import RecordsPreviewRead
 from app.services import daily_state as daily_state_service
 from app.services import owl as owl_service
+from app.services import records as records_service
 from app.services.daily import day_overview
 from app.services.progress import load_histories
 
@@ -59,6 +61,9 @@ def get_dashboard_data(
     day = day_progress(histories, today)
     summaries = tuple(streak_summary(h, today) for h in histories)
     items = day_overview(session, today)
+    # Stage 11: the compact records block, computed from the histories already in
+    # memory so the dashboard never loads habit history twice.
+    records = records_service.records_preview(session, today=today, histories=histories)
     owl = owl_service.dashboard_owl(
         histories, today=today, after_hours=after_hours, day=day, items=items,
         summaries=summaries,
@@ -76,6 +81,7 @@ def get_dashboard_data(
         "yesterday_state": DailyStateRead.model_validate(y_state) if y_state else None,
         "today_items": [DayItemRead.from_item(i) for i in items],
         "owl": owl,
+        "records": RecordsPreviewRead.from_preview(records),
     }
 
 

@@ -89,6 +89,8 @@ EXPECTED_PATHS = {
     "/api/experiments",
     "/api/experiments/{experiment_id}",
     "/api/experiments/{experiment_id}/cancel",
+    # Stage 11 — records & achievements
+    "/api/records",
 }
 
 

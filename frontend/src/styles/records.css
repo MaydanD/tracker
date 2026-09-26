@@ -1,0 +1,271 @@
+/* Stage 11 — records & achievements. Plain CSS, reusing the existing palette. */
+
+/* -- summary ---------------------------------------------------------------- */
+
+.records-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  max-width: 960px;
+}
+
+.records-summary__line {
+  font-size: 13px;
+  margin: 0;
+  color: var(--color-text);
+}
+
+.records-section__title {
+  font-size: 15px;
+  margin: 22px 0 10px;
+}
+
+/* -- record cards ----------------------------------------------------------- */
+
+.records-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+  max-width: 960px;
+}
+
+.record-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.record-card--accent {
+  border-color: var(--color-accent);
+}
+
+.record-card--wide {
+  grid-column: 1 / -1;
+}
+
+.record-card__title {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.record-card__value {
+  font-size: 26px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.record-card__context {
+  font-size: 13px;
+  margin: 0;
+}
+
+.record-card__meta,
+.record-card__footnote {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  margin: 0;
+}
+
+.record-consistency {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.record-consistency__row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 6px;
+}
+
+.record-consistency__row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.record-consistency__name {
+  font-weight: 600;
+  min-width: 120px;
+}
+
+.record-consistency__value {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.record-consistency__meta {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+/* -- achievements ----------------------------------------------------------- */
+
+.achievements {
+  max-width: 960px;
+}
+
+.achievements__count {
+  font-size: 14px;
+  margin: 0 0 4px;
+}
+
+.achievements__subtitle {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  margin: 18px 0 8px;
+  text-transform: uppercase;
+}
+
+.achievements__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.achievements__empty {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.achievement {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+
+.achievement--achieved {
+  border-left-color: #2f9e5f;
+}
+
+.achievement--locked {
+  border-left-color: #c8ced4;
+  background: #fafbfc;
+}
+
+.achievement__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.achievement__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.achievement__state {
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+.achievement--achieved .achievement__state {
+  background: #e5f4ea;
+  border: 1px solid #b5dfc4;
+  color: #1f6b3a;
+}
+
+.achievement--locked .achievement__state {
+  background: #eef1f4;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.achievement__description {
+  font-size: 13px;
+  margin: 0;
+}
+
+.achievement__category {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.achievement__date {
+  color: #1f6b3a;
+  font-size: 12px;
+  margin: 0;
+}
+
+.achievement__progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.achievement__bar {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  background: #eef1f4;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.achievement__fill {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: 999px;
+}
+
+.achievement__counts {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* -- dashboard preview ------------------------------------------------------ */
+
+.records-preview__line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 8px;
+}
+
+.records-preview__label {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.records-preview__value {
+  font-size: 14px;
+  font-weight: 600;
+}

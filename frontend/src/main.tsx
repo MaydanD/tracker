@@ -10,6 +10,7 @@ import './styles/calendar.css'
 import './styles/insights.css'
 import './styles/owl.css'
 import './styles/experiments.css'
+import './styles/records.css'
 
 const container = document.getElementById('root')
 if (!container) {

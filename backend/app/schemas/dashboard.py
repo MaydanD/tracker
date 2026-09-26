@@ -8,6 +8,7 @@ from app.domain.owl import OwlState
 from app.schemas.daily import DayItemRead
 from app.schemas.daily_state import DailyStateRead
 from app.schemas.progress import DayProgressRead, StreakRead, WeekProgressRead
+from app.schemas.records import RecordsPreviewRead
 
 
 class ReadModel(BaseModel):
@@ -23,6 +24,8 @@ class DashboardRead(ReadModel):
     today_items: list[DayItemRead]
     # Stage 9: the one contextual Owl state for the dashboard, or null.
     owl: OwlState | None = None
+    # Stage 11: a compact records preview (top streak + latest achievement).
+    records: RecordsPreviewRead | None = None
 
 
 class CalendarDaySummaryRead(ReadModel):

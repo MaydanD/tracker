@@ -4,7 +4,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from app.domain.progress import HabitHistory, Version, current_streak, day_progress, week_bounds, week_habit_progress, week_progress
+from app.domain.progress import HabitHistory, Version, current_streak, daily_runs, daily_streak_milestones, day_progress, streak_summary, week_bounds, week_habit_progress, week_progress
 from app.domain.schedule import Schedule
 
 MON = date(2026, 9, 7)
@@ -189,3 +189,55 @@ def test_weekly_excess_cannot_cover_missing_daily_part():
     p = week_habit_progress(h, MON, MON + timedelta(days=7))
     assert (p.completed_count, p.quota) == (5, 5)
     assert (p.completed_weight, p.required_weight, p.status) == (3, 5, "failed")
+
+
+# --- Stage 11: canonical run spans and milestone dating ---------------------
+
+
+def test_daily_runs_expose_closed_runs_then_the_open_one():
+    h = history(done=[0, 1, 2, 5, 6])
+    runs = daily_runs(h, MON + timedelta(days=6))
+    assert [(r.start, r.end, r.length, r.open) for r in runs] == [
+        (MON, MON + timedelta(days=2), 3, False),
+        (MON + timedelta(days=5), MON + timedelta(days=6), 2, True),
+    ]
+    # Today's unrecorded day neither adds nor breaks: a two-day run stays open
+    # when evaluated during an unrecorded third day.
+    open_run = daily_runs(history(done=[0, 1]), MON + timedelta(days=2))
+    assert [(r.start, r.end, r.length, r.open) for r in open_run] == [
+        (MON, MON + timedelta(days=1), 2, True)
+    ]
+
+
+def test_daily_runs_absent_for_inactive_or_non_daily_habits():
+    assert daily_runs(history(schedule=WEEKLY, done=[0, 1]), MON + timedelta(days=1)) == ()
+    archived = history(done=[0, 1], archived=MON + timedelta(days=3))
+    runs = daily_runs(archived, MON + timedelta(days=10))
+    assert [(r.length, r.end) for r in runs] == [(2, MON + timedelta(days=1))]
+
+
+def test_streak_milestones_date_the_day_each_target_was_reached():
+    h = history(done=range(10))
+    milestones = daily_streak_milestones(h, [3, 7, 30], MON + timedelta(days=9))
+    assert milestones == {
+        3: MON + timedelta(days=2),
+        7: MON + timedelta(days=6),
+    }
+
+
+def test_streak_milestones_prefer_the_first_reachable_run():
+    h = history(done=[0, 1, 2, 3, 4, 5, 6, 8, 9, 10])
+    milestones = daily_streak_milestones(h, [4], MON + timedelta(days=10))
+    # The first run reached 4 on day 3, even though a later run also passes it.
+    assert milestones[4] == MON + timedelta(days=3)
+
+
+def test_streak_milestones_agree_with_the_streak_summary():
+    h = history(done=[0, 1, 2, 3, 5, 6, 7, 8])
+    today = MON + timedelta(days=8)
+    milestones = daily_streak_milestones(h, [1, 2, 3, 4, 5], today)
+    summary = streak_summary(h, today)
+    assert max(milestones) == 4
+    # The best closed run is a prefix of the longest run ever reached.
+    assert summary.current_streak == 4
+    assert summary.previous_best_streak == 4

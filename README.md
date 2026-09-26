@@ -15,16 +15,17 @@ source of truth for what Tracker will become.
 **UI language: Russian.** All user-facing text, including errors and schedule labels,
 is Russian (PROJECT-SPEC.md §2.1); API fields and codes remain English.
 
-**Current stage: Stage 10 — Experiments.** A personal experiment is a bounded
-window the user defines (a title, a hypothesis and what they change). Tracker then
-**describes** how the existing data related to that window — **before / during /
-after** — over comparable windows of equal length, with explicit coverage. Missing
-days count toward coverage, never as zeros or failures, and the wording is
-descriptive: the UI never claims the experiment *caused* a change. Concurrent
-experiments are allowed but the detail page warns when windows overlap. The Owl
-from Stage 9 gained a small experiment banner (reusing the existing artwork). See
-the [experiments contract](docs/experiments.md); the [Owl contract](docs/owl-assistant.md)
-still holds for the assistant banner.
+**Current stage: Stage 11 — Records & Achievements.** Tracker now derives
+personal records and milestone achievements from the history it already holds: the
+longest habit streak, the best day and completed week, the most habits done in a
+day and the most consistent month per habit, plus a short static catalogue of real
+achievements with honest historical dates and progress toward locked goals.
+Nothing is stored — there is no records table, no mutable counter and no new
+migration — so a record is a projection of the data, never a second source of
+truth. The Records page is at `/#/records`, the dashboard shows a compact preview,
+and the Owl celebrates a new streak record by reusing its existing artwork. See
+the [records contract](docs/records.md); the [experiments contract](docs/experiments.md)
+and the [Owl contract](docs/owl-assistant.md) still hold.
 
 ---
 
@@ -68,6 +69,13 @@ still holds for the assistant banner.
   and `POST /api/experiments/{id}/cancel`. Comparisons reuse the canonical
   dataset: no second statistics engine, no causal claims, missing days never
   become zeros.
+- **Records & Achievements**: derived personal bests — longest streak, best day,
+  best completed week with coverage, most habits done in a day, and best elapsed
+  month per habit — and a static 17-entry achievement catalogue with stable keys,
+  real first-reached dates, and progress toward locked goals. `GET /api/records`,
+  a compact `records` block on the dashboard, and a Russian `/#/records` page. No
+  counters and no migration: everything is computed from the existing history,
+  missing days are never failures, and archived habits keep their records.
 - **Descriptive analytics API**: `GET /api/analytics/descriptive` with explicit
   inclusive dates and selected variables; typed summaries, coverage, rolling
   values and safe comparisons.
@@ -271,8 +279,9 @@ Migration scripts live in `backend/alembic/versions/`:
 | `d5a1c09e2401` | Independent `daily_states` (Stage 5; Stage 4 and 6 had no migrations) |
 
 Upgrading an existing database is just `alembic upgrade head`; each stage adds its
-own tables and touches no existing data. Stage 6 is a read-only presentation and
-aggregation layer, so no new DB migration or schema change was introduced.
+own tables and touches no existing data. Stages 6, 9 and 11 are read-only
+presentation/derivation layers (dashboard/calendar, Owl, records & achievements),
+so they introduced no new DB migration or schema change.
 
 Keep `alembic check` passing: it fails when models and migrations disagree.
 
@@ -382,9 +391,15 @@ notes, past-day editing, the future planned-skip rules and clearing a record.
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/dashboard` | Main dashboard summary: today score/weight/habits, current week score/quota progress, active streaks, and yesterday's Daily State |
+| `GET /api/dashboard` | Main dashboard summary: today score/weight/habits, current week score/quota progress, active streaks, yesterday's Daily State, Owl and a compact records preview |
 | `GET /api/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD` | Aggregated date range summary for monthly calendar and yearly heatmap (daily score, obligations, mood indicator) |
 | `GET /api/days/{YYYY-MM-DD}/overview` | Aggregated overview for a day card: daily score, habit entry details, and Daily State summary |
+
+### Records (Stage 11)
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/records` | Derived personal records (`summary`, `records`, `achievements`, `recent_achievements`). Read-only and un-cached: deleted history can change a record. |
 
 There are deliberately no delete endpoints for habits or areas: they are archived,
 so historical records keep resolving. The only delete in the API removes a daily
@@ -729,8 +744,8 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
   `archived_at`; restore clears it. Stage 4 uses this boundary as documented above.
 - **Full partial-week quota.** Creation or schedule change midweek does not
   prorate a weekly quota; the UI shows the required count explicitly.
-- Still absent: experiments, records, recommendation/prediction engines,
-  Excel export, restore and the Windows executable. Insights discovery is bounded;
+- Still absent: recommendation/prediction engines, Excel export, restore and the
+  Windows executable. Insights discovery is bounded;
   the UI explorer currently selects daily variables. History keeps the latest
   evaluation per hypothesis per day and returns the latest 200 snapshots.
 - **The Owl is guidance only.** It selects one deterministic state from existing
@@ -756,12 +771,14 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
 
 ## Next stage
 
-Stage 10 Experiments is complete as the descriptive personal-experiment layer:
-the user defines a window and Tracker describes the already-recorded data around
-it. Stage 4 remains the source of progress and streaks, Stage 7A the canonical
-dataset, and Stage 8 the source of every statistical value. Later product stages
-remain separate: there is no causal inference, no significance engine for
-experiments, no recommendations, prediction or LLM generation. See
+Stage 11 Records & Achievements is complete as a derived long-term-progress layer:
+personal records and milestone achievements are computed from the current history,
+never stored. Stage 4 remains the source of progress and streaks, Stage 7A the
+canonical dataset, and Stage 8 the source of every statistical value. Later product
+stages remain separate: there is no causal inference, no significance engine for
+experiments, no recommendations, prediction or LLM generation. Stage 12 covers full
+backup/export and desktop packaging. See
+[Stage 11 architecture](docs/records.md),
 [Stage 10 architecture](docs/experiments.md),
 [Stage 9 architecture](docs/owl-assistant.md) and
 [Stage 8 architecture and limitations](docs/analytics-insights.md).

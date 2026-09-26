@@ -6,6 +6,7 @@ proration). Only weekly-scheduled dates feed that component; daily dates feed
 their own obligations. Thus schedule changes never double-count a completion.
 """
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Literal
@@ -185,6 +186,110 @@ def week_progress(
     )
 
 
+def streak_as_of(habit: HabitHistory, today: date) -> date:
+    """The last date a streak is evaluated at for this habit.
+
+    An archived period is frozen at its last active day; today itself is always
+    in scope, so an unfinished day can never silently break a run.
+    """
+    if habit.archived_on and habit.archived_on > date.min:
+        return min(today, habit.archived_on - DAY)
+    return today
+
+
+@dataclass(frozen=True)
+class DailySpan:
+    """A maximal run of consecutive daily completions.
+
+    ``open`` means the run still extends to the evaluation date — the current
+    streak — rather than having ended on ``end``.
+    """
+
+    start: date
+    end: date
+    length: int
+    open: bool
+
+
+def _iter_daily_spans(
+    habit: HabitHistory, as_of: date, today: date,
+) -> Iterator[DailySpan]:
+    """Yield completed runs in order, then the still-open run (if any).
+
+    This is the single rule behind both the streak summary and milestone dating.
+    Today's unrecorded day neither adds a day nor breaks the run; only
+    daily-scheduled days count, so a schedule change or a non-daily day ends the
+    run exactly as it always has.
+    """
+
+    if not habit.versions:
+        return
+    cursor = habit.versions[0].effective_from
+    run_start: date = cursor
+    run_end: date = cursor
+    length = 0
+    while cursor <= as_of:
+        # Today's unfinished day neither adds a day nor breaks the run; it is
+        # simply skipped, exactly like the backward scan.
+        if cursor == today and habit.entries.get(cursor) != "done":
+            cursor += DAY
+            continue
+        config = habit.version_on(cursor)
+        is_daily = config is not None and config.schedule.type == ScheduleType.DAILY
+        if is_daily and habit.entries.get(cursor) == "done":
+            if length == 0:
+                run_start = cursor
+            length += 1
+            run_end = cursor
+        else:
+            if length:
+                yield DailySpan(run_start, run_end, length, open=False)
+            length = 0
+        if cursor == date.max:
+            break
+        cursor += DAY
+    if length:
+        yield DailySpan(run_start, run_end, length, open=True)
+
+
+def daily_runs(habit: HabitHistory, today: date) -> tuple[DailySpan, ...]:
+    """Every daily run for a habit, closed runs first and the open run last.
+
+    A habit that is not currently active has no runs; the canonical rule is
+    shared with :func:`streak_summary` through :func:`_iter_daily_spans`.
+    """
+
+    if not habit.versions:
+        return ()
+    as_of = streak_as_of(habit, today)
+    if habit.version_on(as_of) is None or not habit.active_on(as_of):
+        return ()
+    return tuple(_iter_daily_spans(habit, as_of, today))
+
+
+def daily_streak_milestones(
+    habit: HabitHistory, targets: tuple[int, ...] | list[int], today: date,
+) -> dict[int, date]:
+    """The first date a daily run reached each target length.
+
+    Uses :func:`daily_runs`, so it can never disagree with the streak summary: an
+    ongoing run counts as soon as it reaches the target. Returns only the targets
+    that were actually reached.
+    """
+
+    wanted = sorted({target for target in targets if target > 0})
+    if not wanted:
+        return {}
+    reached: dict[int, date] = {}
+    for span in daily_runs(habit, today):
+        for target in wanted:
+            if target not in reached and span.length >= target:
+                reached[target] = date.fromordinal(span.start.toordinal() + target - 1)
+        if len(reached) == len(wanted):
+            break
+    return reached
+
+
 @dataclass(frozen=True)
 class StreakSummary:
     """Current streak plus the best run that ended before it.
@@ -215,9 +320,7 @@ def streak_summary(habit: HabitHistory, today: date) -> StreakSummary:
 
     # Freeze at the last active date. An archived daily period is closed;
     # a started weekly quota still resolves at its calendar Sunday boundary.
-    as_of = today
-    if habit.archived_on and habit.archived_on > date.min:
-        as_of = min(today, habit.archived_on - DAY)
+    as_of = streak_as_of(habit, today)
     version = habit.version_on(as_of)
     unit: Literal["days", "weeks"] = (
         "days" if version is None or version.schedule.type == ScheduleType.DAILY
@@ -227,54 +330,45 @@ def streak_summary(habit: HabitHistory, today: date) -> StreakSummary:
     if not active:
         return StreakSummary(habit.habit_id, 0, 0, None, unit, as_of, active=False)
 
+    if unit == "days":
+        # One pass over the canonical spans: the trailing open run is the current
+        # streak, and the longest run that had already ended is the previous best.
+        spans = tuple(_iter_daily_spans(habit, as_of, today))
+        current = spans[-1].length if spans and spans[-1].open else 0
+        closed_best = 0
+        closed_best_end: date | None = None
+        for span in spans:
+            if not span.open and span.length > closed_best:
+                closed_best, closed_best_end = span.length, span.end
+        return StreakSummary(habit.habit_id, current, closed_best, closed_best_end,
+                             unit, as_of, active=True)
+
     first = habit.versions[0].effective_from
     run = 0
     run_end: date | None = None
     best = 0
     best_end: date | None = None
-
-    if unit == "days":
-        cursor = first
-        while cursor <= as_of:
-            # Today's unfinished day neither adds a day nor breaks the run; it
-            # is simply skipped, exactly like the backward scan.
-            if cursor == today and habit.entries.get(cursor) != "done":
-                cursor += DAY
-                continue
-            config = habit.version_on(cursor)
-            is_daily = config is not None and config.schedule.type == ScheduleType.DAILY
-            if is_daily and habit.entries.get(cursor) == "done":
-                run += 1
-                run_end = cursor
-            else:
-                if run > best:
-                    best, best_end = run, run_end
-                run, run_end = 0, None
-            if cursor == date.max:
-                break
-            cursor += DAY
-    else:
-        cursor, _ = week_bounds(first)
-        last_week, _ = week_bounds(as_of)
-        current_week, _ = week_bounds(today)
-        while cursor <= last_week:
-            progress = week_habit_progress(habit, cursor, today)
-            if progress is None or progress.weekly_quota == 0:
-                if run > best:
-                    best, best_end = run, run_end
-                run, run_end = 0, None
-            elif progress.weekly_completed_count >= progress.weekly_quota:
-                run += 1
-                run_end = cursor
-            elif cursor != current_week:
-                # A completed week below quota closes the run; the current,
-                # still-open week does not.
-                if run > best:
-                    best, best_end = run, run_end
-                run, run_end = 0, None
-            if cursor >= last_week:
-                break
-            cursor += timedelta(days=7)
+    cursor, _ = week_bounds(first)
+    last_week, _ = week_bounds(as_of)
+    current_week, _ = week_bounds(today)
+    while cursor <= last_week:
+        progress = week_habit_progress(habit, cursor, today)
+        if progress is None or progress.weekly_quota == 0:
+            if run > best:
+                best, best_end = run, run_end
+            run, run_end = 0, None
+        elif progress.weekly_completed_count >= progress.weekly_quota:
+            run += 1
+            run_end = cursor
+        elif cursor != current_week:
+            # A completed week below quota closes the run; the current,
+            # still-open week does not.
+            if run > best:
+                best, best_end = run, run_end
+            run, run_end = 0, None
+        if cursor >= last_week:
+            break
+        cursor += timedelta(days=7)
 
     return StreakSummary(habit.habit_id, run, best, best_end, unit, as_of, active=True)
 

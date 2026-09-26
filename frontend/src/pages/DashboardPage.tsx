@@ -1,6 +1,7 @@
 import { fetchDashboard } from '../api/dashboard'
 import { ErrorBanner, LoadingText } from '../components/Feedback'
 import { OwlAssistantBanner } from '../components/owl/OwlAssistantBanner'
+import { RecordsPreviewCard } from '../components/records/RecordsPreviewCard'
 import { statusLabel } from '../components/daily/status'
 import { useAsyncData } from '../hooks/useAsyncData'
 import { formatFullDateLabel, formatShortDateLabel } from '../utils/dateUtils'
@@ -32,7 +33,7 @@ export function DashboardPage() {
     )
   }
 
-  const { today, today_progress, week_progress, streaks, yesterday_state, today_items, owl } = data
+  const { today, today_progress, week_progress, streaks, yesterday_state, today_items, owl, records } = data
 
   return (
     <section className="page">
@@ -175,6 +176,9 @@ export function DashboardPage() {
             </ul>
           )}
         </section>
+
+        {/* Stage 11: a compact records block, at most one record + one achievement. */}
+        <RecordsPreviewCard records={records} />
 
         {/* Card 4: Вчерашнее состояние */}
         <section className="dashboard-card" aria-label="Вчерашнее состояние">

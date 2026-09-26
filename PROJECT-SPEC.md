@@ -1017,6 +1017,34 @@ Examples:
 
 No XP economy is required.
 
+### 20.1 Реализовано (Stage 11)
+
+Рекорды и достижения **не хранятся** и вычисляются из уже существующей истории:
+нет таблицы `records`, нет mutable-счётчиков вида `best_streak = 17`, миграция не
+нужна (Alembic head остаётся `c3f1a7b24d90`).
+
+**Records:** самая длинная серия по привычке (дни/недели, с диапазоном дат),
+лучший день (canonical дневной score, при равенстве побеждает самый ранний),
+лучшая **завершённая** неделя (≥ 4 наблюдаемых дня, покрытие ≥ 60 %; частичная
+текущая неделя не сравнивается с полными), максимум выполненных привычек за день и
+лучший полностью прошедший календарный месяц на привычку (≥ 10 дней обязательств).
+Общая статистика показывает только честно выводимые метрики (tracked days,
+выполнения, эксперименты, первые даты stable/well_supported insight).
+
+**Achievements:** статический versioned-каталог из 17 достижений с stable key,
+русскими title/description, category, `achieved`, реальным `achieved_on` (первая
+дата достижения, восстановленная из истории; `null`, когда её нельзя восстановить —
+никогда «сегодня») и progress `current/target` для locked. Порядок стабильный:
+недавние → ближайшие locked → каталог. Категории: streak, consistency, tracking,
+daily_state, experiments, insights. Никакого XP, уровней, монет и награды за
+запуск приложения. `cancelled` эксперимент не считается завершённым; insights
+датируются по существующим `insight_snapshots`, а не по текущей ленте.
+
+Серия берётся из canonical `streak_summary`; missing ≠ failure; архивные привычки
+сохраняют свои рекорды. API: `GET /api/records`; Dashboard несёт компактный
+`records`-блок. Owl переиспользует `owl_record` (`new_record`), не перебивая
+execution failures. Полный контракт: [records.md](docs/records.md).
+
 ---
 
 ## 21. Habit history
@@ -1220,7 +1248,7 @@ Do not treat packaging as a trivial final command.
 | **8 — Insights** | Human-readable findings, graphs, filters, evidence detail, insight history |
 | **9 — Owl** | Persistent data-backed owl, slippage detection, prioritization, sarcastic commentary without fabricated facts |
 | **10 — Experiments** | Experiment CRUD, before/during/after comparison, state and habit outcomes |
-| **11 — Records & Achievements** | Personal records, decorative achievements, long-term milestones |
+| **11 — Records & Achievements** ✅ | Implemented: derived personal records (longest streak, best day, best week, most completed, per-habit consistency), a static 17-entry achievement catalogue with real historical dates and locked-progress, `GET /api/records`, a compact dashboard preview and Owl record celebration. No persistence, no migration. Semantics: §20.1. |
 | **12 — Full Backup / Export / Desktop Packaging** | Backup retention, integrity checks, restore, Excel export, pywebview, PyInstaller Windows build |
 | **13 — Hardening** | Migration safety, corruption handling, performance profiling, analytics edge cases, packaging edge cases, UI polish |
 
@@ -1368,6 +1396,41 @@ API: `GET/POST /api/experiments`, `GET/PATCH /api/experiments/{id}`,
 график без нулей вместо пропусков, coverage, нейтральный итог). Полный контракт:
 [experiments.md](docs/experiments.md).
 
+
+#### Реализовано: Stage 11 — Records & Achievements
+
+Stage 11 добавляет слой долгосрочного прогресса поверх существующей истории:
+личные рекорды и дискретные вехи, **вычисляемые**, а не хранимые. Миграция не
+нужна — Alembic head остаётся Stage 10 (`c3f1a7b24d90`).
+
+`app.domain.records` — чистый доменный слой: один ограниченный проход по дню,
+из которого выводятся недели и месяцы; ни БД, ни часов, ни random. Record types:
+самая длинная серия (дни/недели), лучший день (самый ранний wins on tie), лучшая
+завершённая неделя (≥ 4 наблюдаемых дня, покрытие ≥ 60 %), максимум выполненных
+привычек за день, лучший полностью прошедший месяц на привычку (≥ 10 дней
+обязательств). Серия не заводит третий алгоритм: используется canonical
+`streak_summary`, после Stage 11 опирающийся на единый span-итератор
+(`daily_runs`/`daily_streak_milestones`).
+
+`app.domain.achievements` — статический versioned-каталог из 17 достижений
+(streak/consistency/tracking/daily_state/experiments/insights) с stable key,
+русскими формулировками, реальным `achieved_on` (первая дата достижения;
+`null`, когда восстановить нельзя — никогда «сегодня») и progress для locked.
+Порядок стабильный: недавние (порог 7 дней через injected `Clock`) → ближайшие
+locked → индекс каталога. Ни XP, ни уровней, ни монет, ни награды за запуск.
+
+`app.services.records` делает **не более пяти** пакетных чтений независимо от
+размера истории (истории привычек; даты Daily State; эксперименты; первые даты
+confidence из `insight_snapshots`) и переиспользует in-memory histories Dashboard.
+Missing ≠ failed, архивные привычки сохраняют рекорды, `cancelled` эксперимент не
+считается завершённым, insights датируются по snapshots, а не по текущей ленте.
+
+API: `GET /api/records`; `GET /api/dashboard` несёт компактный `records`-блок.
+Frontend: `/#/records` («Рекорды и достижения») и `RecordsPreviewCard` на
+Dashboard, полностью на русском, только CSS без новых картинок. Owl (Stage 9)
+празднует новый рекорд серии через существующий `owl_record` (`new_record`,
+приоритет 60) — ниже execution failures. Полный контракт:
+[records.md](docs/records.md).
 
 ### Stages 11–13
 
