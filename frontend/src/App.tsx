@@ -5,6 +5,7 @@ import { AreasPage } from './pages/AreasPage'
 import { CalendarPage } from './pages/CalendarPage'
 import { CheckInPage } from './pages/CheckInPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { ExperimentDetailPage } from './pages/ExperimentDetailPage'
 import { ExperimentsPage } from './pages/ExperimentsPage'
 import { HabitsPage } from './pages/HabitsPage'
 import { InsightsPage } from './pages/InsightsPage'
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="areas" element={<AreasPage />} />
           <Route path="insights" element={<InsightsPage />} />
           <Route path="experiments" element={<ExperimentsPage />} />
+          <Route path="experiments/:experimentId" element={<ExperimentDetailPage />} />
           <Route path="records" element={<RecordsPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />

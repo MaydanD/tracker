@@ -199,3 +199,27 @@ class InsightNotFoundError(NotFoundError):
 
     code = "insight_not_found"
     message = "That insight does not exist."
+
+
+# -- experiments (Stage 10) -------------------------------------------------
+
+
+class ExperimentNotFoundError(NotFoundError):
+    """No experiment exists with that id."""
+
+    code = "experiment_not_found"
+    message = "That experiment does not exist."
+
+
+class InvalidExperimentError(InvalidConfigurationError):
+    """A product rule rejected the submitted experiment fields (HTTP 422)."""
+
+    code = "invalid_experiment"
+    message = "The experiment data is not valid."
+
+
+class ExperimentStateError(ConflictError):
+    """The requested change is not allowed in the experiment's current state."""
+
+    code = "experiment_state_conflict"
+    message = "That change is not allowed for this experiment's current state."

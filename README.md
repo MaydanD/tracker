@@ -15,13 +15,16 @@ source of truth for what Tracker will become.
 **UI language: Russian.** All user-facing text, including errors and schedule labels,
 is Russian (PROJECT-SPEC.md §2.1); API fields and codes remain English.
 
-**Current stage: Stage 9 — Owl Assistant.** A compact, contextual mascot banner
-sits at the top of the Dashboard and the Analytics page. It shows **exactly one**
-state with a short Russian line and a factual explanation, driven entirely by
-Stage 4 progress/streaks and the Stage 8 availability, confidence and guardrail
-verdicts. Absence of data is never presented as failure, sarcasm is suppressed
-by low mood/wellbeing, and there is **no Owl history table**: the state is
-recomputed from existing data. See the [Owl contract](docs/owl-assistant.md).
+**Current stage: Stage 10 — Experiments.** A personal experiment is a bounded
+window the user defines (a title, a hypothesis and what they change). Tracker then
+**describes** how the existing data related to that window — **before / during /
+after** — over comparable windows of equal length, with explicit coverage. Missing
+days count toward coverage, never as zeros or failures, and the wording is
+descriptive: the UI never claims the experiment *caused* a change. Concurrent
+experiments are allowed but the detail page warns when windows overlap. The Owl
+from Stage 9 gained a small experiment banner (reusing the existing artwork). See
+the [experiments contract](docs/experiments.md); the [Owl contract](docs/owl-assistant.md)
+still holds for the assistant banner.
 
 ---
 
@@ -57,6 +60,14 @@ recomputed from existing data. See the [Owl contract](docs/owl-assistant.md).
   responses, rendered as a reusable `OwlAssistantBanner` on both pages. Uses the six
   existing PNGs, keeps a stable fingerprint for session dismiss, and downgrades
   sarcasm for 24 hours client-side — no new table and no duplicated analytics.
+- **Experiments**: define a bounded personal experiment (title, hypothesis,
+  protocol, start/end dates), track its lifecycle (scheduled/active/completed/
+  cancelled) and see a descriptive before/during/after comparison of overall
+  progress, individual habits and Daily State, with per-window coverage and an
+  overlap warning. `GET/POST /api/experiments`, `GET/PATCH /api/experiments/{id}`
+  and `POST /api/experiments/{id}/cancel`. Comparisons reuse the canonical
+  dataset: no second statistics engine, no causal claims, missing days never
+  become zeros.
 - **Descriptive analytics API**: `GET /api/analytics/descriptive` with explicit
   inclusive dates and selected variables; typed summaries, coverage, rolling
   values and safe comparisons.
@@ -745,10 +756,12 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
 
 ## Next stage
 
-Stage 9 Owl is complete as the contextual assistant layer. Stage 4 remains the
-source of progress and streaks, and Stage 8 remains the source of every
-statistical value; the Owl only selects and renders one state. Later product
-stages remain separate: there is no recommendation engine, causal inference,
-prediction or LLM generation. See
-[Stage 9 architecture](docs/owl-assistant.md).
-See [Stage 8 architecture and limitations](docs/analytics-insights.md).
+Stage 10 Experiments is complete as the descriptive personal-experiment layer:
+the user defines a window and Tracker describes the already-recorded data around
+it. Stage 4 remains the source of progress and streaks, Stage 7A the canonical
+dataset, and Stage 8 the source of every statistical value. Later product stages
+remain separate: there is no causal inference, no significance engine for
+experiments, no recommendations, prediction or LLM generation. See
+[Stage 10 architecture](docs/experiments.md),
+[Stage 9 architecture](docs/owl-assistant.md) and
+[Stage 8 architecture and limitations](docs/analytics-insights.md).

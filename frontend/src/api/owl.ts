@@ -7,7 +7,7 @@
  */
 
 export type OwlTone = 'celebratory' | 'supportive' | 'neutral' | 'cautionary' | 'sarcastic'
-export type OwlContext = 'dashboard' | 'insights'
+export type OwlContext = 'dashboard' | 'insights' | 'experiments'
 
 /** Asset keys map to the canonical PNGs in the repository `owl/` directory. */
 export type OwlAssetKey =

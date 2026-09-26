@@ -5,10 +5,12 @@ import App from './App'
 import { NAVIGATION_ITEMS } from './navigation'
 import {
   jsonResponse,
+  stubApi,
   stubFetch,
   stubHealthyBackend,
   stubUnreachableBackend,
 } from './test/fetchStub'
+import { detailFixture, experimentFixture } from './test/experimentsFixture'
 
 describe('App shell', () => {
   it('renders the Tracker shell with every navigation destination', () => {
@@ -108,6 +110,49 @@ describe('App shell', () => {
     ).toBeInTheDocument()
     expect(screen.getByLabelText('Статистические проверки')).toBeInTheDocument()
     expect(screen.queryByText('Запланировано: Этап 8')).not.toBeInTheDocument()
+  })
+
+  it('keeps the section title on an experiment detail page', async () => {
+    stubApi({
+      'GET /api/health': () =>
+        jsonResponse({
+          status: 'ok',
+          app: 'Tracker',
+          version: '0.1.0',
+          environment: 'test',
+        }),
+      'GET /api/ready': () =>
+        jsonResponse({ status: 'ready', checks: { database: 'ok', migrations: 'ok' } }),
+      'GET /api/dashboard': () =>
+        jsonResponse({
+          today: '2026-09-26',
+          today_progress: {
+            score: null, completed_weight: 0, required_weight: 0,
+            entry_date: '2026-09-26', obligations: [],
+          },
+          week_progress: {
+            score: null, completed_weight: 0, required_weight: 0,
+            week_start: '2026-09-21', week_end: '2026-09-27', habits: [],
+          },
+          streaks: [], yesterday_state: null, today_items: [], owl: null,
+        }),
+      'GET /api/experiments': () =>
+        jsonResponse({ experiments: [experimentFixture({ id: 1 })], owl: null }),
+      'GET /api/experiments/1': () =>
+        jsonResponse(detailFixture({ experiment: experimentFixture({ id: 1 }) })),
+    })
+
+    render(<App />)
+    fireEvent.click(screen.getByRole('link', { name: /эксперименты/i }))
+    fireEvent.click(await screen.findByRole('link', { name: 'Открыть' }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { name: 'Без алкоголя 14 дней', level: 1 }),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.getByText('Эксперименты', { selector: '.topbar__title' })).toBeInTheDocument()
+    expect(screen.queryByText('Неизвестный раздел')).toBeNull()
   })
 
   it('rechecks the backend when asked', async () => {

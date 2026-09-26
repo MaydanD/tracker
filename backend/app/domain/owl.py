@@ -26,7 +26,7 @@ from hashlib import sha256
 from typing import Literal
 
 OwlTone = Literal["celebratory", "supportive", "neutral", "cautionary", "sarcastic"]
-OwlContext = Literal["dashboard", "insights"]
+OwlContext = Literal["dashboard", "insights", "experiments"]
 
 # Asset keys are the stems of the canonical PNGs kept in ``owl/`` at the repo
 # root. No other asset exists; every analysis-quality state reuses ``insight``.
@@ -74,6 +74,14 @@ INSIGHTS_PRIORITY: dict[str, int] = {
     "stable_insight": 40,
     "lag_insight": 40,
     "preliminary_only": 50,
+}
+
+# Experiments are informational: an active window is the most useful reminder,
+# a completed-but-thin one is next, and a completed window invites a look.
+EXPERIMENTS_PRIORITY: dict[str, int] = {
+    "experiment_active": 10,
+    "experiment_no_data": 20,
+    "experiment_completed": 30,
 }
 
 _UNIT_WORD: dict[str, str] = {"days": "дней", "weeks": "недель"}
@@ -439,6 +447,62 @@ def select_insights(context: InsightsContext) -> OwlState | None:
     return None
 
 
+@dataclass(frozen=True)
+class ExperimentOwlContext:
+    """Minimal experiment facts for the Experiments page banner."""
+
+    active_title: str | None = None
+    active_day: int | None = None
+    active_total: int | None = None
+    completed_title: str | None = None
+    completed_sufficient: bool | None = None
+
+
+def select_experiments(context: ExperimentOwlContext) -> OwlState | None:
+    """One experiment-related state, reusing the existing ``owl_insight`` asset."""
+
+    if context.active_title is not None:
+        progress = ""
+        if context.active_day is not None and context.active_total is not None:
+            progress = f": день {context.active_day} из {context.active_total}"
+        return OwlState(
+            owl_id="experiment_active",
+            asset_key=ASSET_INSIGHT,
+            tone="supportive",
+            priority=EXPERIMENTS_PRIORITY["experiment_active"],
+            caption_line1="Ну что, проверим.",
+            caption_line2=f"Эксперимент «{context.active_title}» идёт{progress}.",
+            dismissible=True,
+            fingerprint=_fingerprint("experiments", "experiment_active", context.active_title),
+            context="experiments",
+        )
+    if context.completed_title is not None:
+        if context.completed_sufficient is False:
+            return OwlState(
+                owl_id="experiment_no_data",
+                asset_key=ASSET_INSIGHT,
+                tone="neutral",
+                priority=EXPERIMENTS_PRIORITY["experiment_no_data"],
+                caption_line1="Пока рано делать выводы.",
+                caption_line2=f"Эксперимент «{context.completed_title}» завершён, но данных пока мало.",
+                dismissible=True,
+                fingerprint=_fingerprint("experiments", "experiment_no_data", context.completed_title),
+                context="experiments",
+            )
+        return OwlState(
+            owl_id="experiment_completed",
+            asset_key=ASSET_INSIGHT,
+            tone="neutral",
+            priority=EXPERIMENTS_PRIORITY["experiment_completed"],
+            caption_line1="Эксперимент завершён. Теперь есть что сравнивать.",
+            caption_line2=f"Откройте «{context.completed_title}», чтобы увидеть сравнение.",
+            dismissible=True,
+            fingerprint=_fingerprint("experiments", "experiment_completed", context.completed_title),
+            context="experiments",
+        )
+    return None
+
+
 def _lower_first(text: str) -> str:
     return text[:1].lower() + text[1:] if text else text
 
@@ -459,10 +523,12 @@ __all__ = [
     "ASSET_PENDING",
     "ASSET_RECORD",
     "DashboardContext",
+    "ExperimentOwlContext",
     "InsightFact",
     "InsightsContext",
     "OwlState",
     "StreakFact",
     "select_dashboard",
+    "select_experiments",
     "select_insights",
 ]

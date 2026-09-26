@@ -16,10 +16,12 @@ from app.domain.owl import (
     ASSET_PENDING,
     ASSET_RECORD,
     DashboardContext,
+    ExperimentOwlContext,
     InsightFact,
     InsightsContext,
     StreakFact,
     select_dashboard,
+    select_experiments,
     select_insights,
 )
 
@@ -330,3 +332,40 @@ def test_insights_quality_states_outrank_a_finding() -> None:
         stable=fact()))
     assert state is not None
     assert state.owl_id == "insufficient_data"
+
+
+# --------------------------------------------------------------------------- #
+# Experiments (Stage 10 reuse of the same asset)
+# --------------------------------------------------------------------------- #
+
+
+def test_active_experiment_is_supportive_and_uses_insight_asset() -> None:
+    state = select_experiments(ExperimentOwlContext(
+        active_title="Без алкоголя", active_day=6, active_total=14))
+    assert state is not None
+    assert state.owl_id == "experiment_active"
+    assert state.asset_key == ASSET_INSIGHT
+    assert state.context == "experiments"
+    assert "6 из 14" in state.caption_line2
+    assert state.tone == "supportive"
+
+
+def test_completed_experiment_invites_a_look() -> None:
+    state = select_experiments(ExperimentOwlContext(
+        completed_title="Без алкоголя", completed_sufficient=True))
+    assert state is not None
+    assert state.owl_id == "experiment_completed"
+    assert "сравнивать" in state.caption_line1
+
+
+def test_completed_experiment_with_thin_data_is_neutral() -> None:
+    state = select_experiments(ExperimentOwlContext(
+        completed_title="Без алкоголя", completed_sufficient=False))
+    assert state is not None
+    assert state.owl_id == "experiment_no_data"
+    assert state.tone == "neutral"
+    assert "мало" in state.caption_line2
+
+
+def test_experiments_owl_is_none_without_experiments() -> None:
+    assert select_experiments(ExperimentOwlContext()) is None

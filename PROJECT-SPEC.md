@@ -1334,6 +1334,40 @@ fingerprint и cooldown сарказма ~24 часа. Сарказм допус
 Миграция не нужна. Полный контракт, таблица приоритетов/ассетов и ограничения:
 [owl-assistant.md](docs/owl-assistant.md).
 
+#### Реализовано: Stage 10 — Experiments
+
+Эксперимент — заданный пользователем ограниченный период (название, гипотеза,
+протокол, даты). Tracker описывает, как **уже существующие** данные соотносились
+с этим окном: **до / во время / после** — сравнимыми периодами равной длины.
+Это описательный, а не причинный анализ: UI говорит «во время было выше/ниже»,
+никогда — «эксперимент улучшил/привёл к». Эксперимент не создаёт привычку.
+
+Lifecycle (`scheduled`, `active`, `completed`, `cancelled`) не хранится колонкой,
+а выводится из дат и `cancelled_on` (injected `Clock`), поэтому статус не может
+разойтись с календарём. `before`/`after` равны длине `during`, отмена сокращает
+`during` до фактической даты и начинает `after`. Missing ≠ failed: неотмеченный
+день влияет только на coverage и не подставляется нулём. Сравнение считается
+достаточным при ≥ 3 наблюдаемых днях и покрытии ≥ 60 % в `before` и `during`.
+
+Домен (`app.domain.experiments`) чистый — без БД, часов и random; сервис строит
+канонический Stage 7A dataset **один раз** на detail (окно `before + during +
+after`), новых формул и SQL-запросов на сценарий нет. Сравниваются общий прогресс
+(`daily.score`), привычки (`done / obligation`) и поля Daily State; серия по дням
+сохраняет пропуски. Overlap разрешён, но честно помечается на detail.
+
+API: `GET/POST /api/experiments`, `GET/PATCH /api/experiments/{id}`,
+`POST /api/experiments/{id}/cancel`; завершение следует из даты, отдельного
+`/complete` нет. Миграция `c3f1a7b24d90` (`down_revision = b2631e796164`)
+добавляет `experiments` (check-constraints: непустой title, `start_date <= end_date`;
+индекс по `start_date`). Правки: `scheduled`/`active` меняют даты и текст,
+`completed`/`cancelled` даты immutable.
+
+Сова минимально расширена и переиспользует `owl_insight` (`experiment_active`,
+`experiment_no_data`, `experiment_completed`), новых PNG нет. Frontend:
+`/#/experiments` (список + форма) и `/#/experiments/:id` (timeline, сравнения,
+график без нулей вместо пропусков, coverage, нейтральный итог). Полный контракт:
+[experiments.md](docs/experiments.md).
+
 
 ### Stages 11–13
 

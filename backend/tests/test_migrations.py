@@ -11,7 +11,7 @@ from app.db.migrations import applied_revision, expected_revision, schema_status
 from tests.helpers import (
     STAGE_1_REVISION,
     STAGE_2_REVISION,
-    STAGE_8_REVISION,
+    STAGE_10_REVISION,
     alembic_config,
     run_migrations,
     table_names,
@@ -20,6 +20,7 @@ from tests.helpers import (
 STAGE_1_TABLES = {"app_metadata", "alembic_version"}
 STAGE_2_TABLES = {"areas", "habits", "habit_versions"}
 STAGE_3_TABLES = {"daily_habit_entries"}
+STAGE_10_TABLES = {"experiments"}
 
 
 def _recorded_revision(database_url: str) -> str:
@@ -68,12 +69,13 @@ class TestFreshDatabase:
         assert STAGE_1_TABLES <= tables
         assert STAGE_2_TABLES <= tables
         assert STAGE_3_TABLES <= tables
+        assert STAGE_10_TABLES <= tables
         assert settings.resolved_database_path.exists()
 
     def test_upgrade_records_the_head_revision(self, settings: Settings) -> None:
         run_migrations(_prepare(settings))
 
-        assert _recorded_revision(settings.resolved_database_url) == STAGE_8_REVISION
+        assert _recorded_revision(settings.resolved_database_url) == STAGE_10_REVISION
 
     def test_stage_two_schema_has_its_constraints_and_index(
         self, settings: Settings
@@ -148,7 +150,7 @@ class TestUpgradeFromStageOne:
         run_migrations(database_url)
         assert STAGE_2_TABLES <= set(table_names(database_url))
         assert STAGE_3_TABLES <= set(table_names(database_url))
-        assert _recorded_revision(database_url) == STAGE_8_REVISION
+        assert _recorded_revision(database_url) == STAGE_10_REVISION
 
     def test_stage_one_data_survives_the_upgrade(self, settings: Settings) -> None:
         """The Stage 1 marker row must still be there after migrating."""
@@ -218,7 +220,7 @@ class TestUpgradeFromStageTwo:
         run_migrations(database_url)
 
         assert STAGE_3_TABLES <= set(table_names(database_url))
-        assert _recorded_revision(database_url) == STAGE_8_REVISION
+        assert _recorded_revision(database_url) == STAGE_10_REVISION
 
     def test_stage_two_data_survives_the_upgrade(self, settings: Settings) -> None:
         database_url = self._stage_two_database(settings)
@@ -328,12 +330,12 @@ class TestSchemaStatus:
             unmigrated.dispose()
 
     def test_ok_once_migrated(self, database: Database) -> None:
-        assert applied_revision(database) == STAGE_8_REVISION
+        assert applied_revision(database) == STAGE_10_REVISION
         assert schema_status(database) == "ok"
 
-    def test_expected_revision_is_the_stage_eight_revision(self) -> None:
+    def test_expected_revision_is_the_stage_ten_revision(self) -> None:
         """The code's expected head must match the newest migration on disk."""
-        assert expected_revision() == STAGE_8_REVISION
+        assert expected_revision() == STAGE_10_REVISION
 
     def test_pending_for_a_database_left_at_stage_two(self, settings: Settings) -> None:
         database_url = _prepare(settings)
@@ -367,3 +369,5 @@ class TestOfflineMode:
         assert "ck_habit_versions_weight_range" in emitted
         assert "CREATE TABLE daily_habit_entries" in emitted
         assert "ck_daily_habit_entries_skip_reason_matches_status" in emitted
+        assert "CREATE TABLE experiments" in emitted
+        assert "ck_experiments_date_order" in emitted
