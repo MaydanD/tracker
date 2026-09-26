@@ -2,6 +2,7 @@
 import csv
 import io
 import json
+import os
 import struct
 import time
 import zipfile
@@ -283,6 +284,28 @@ def test_forged_zip_entry_count_is_rejected_before_zipinfo_allocation(client, pa
         pytest.fail('Archive directory was not bounded before parsing')
     monkeypatch.setattr(backup.zipfile, 'ZipFile', must_not_open)
     assert client.post('/api/backup/validate', content=bytes(raw)).status_code == 422
+
+
+def test_safety_backups_are_pruned(client, app, payload):
+    backups_dir = app.state.settings.resolved_backups_dir
+    backups_dir.mkdir(parents=True, exist_ok=True)
+    # Create 7 dummy safety backup files with increasing timestamps.
+    old_files = []
+    for index in range(7):
+        file_path = backups_dir / f"tracker-before-restore-2026-01-{index+1:02d}T100000-{index}.zip"
+        file_path.write_bytes(b"dummy safety backup")
+        # Ensure distinct mtimes
+        os.utime(file_path, (1700000000 + index * 10, 1700000000 + index * 10))
+        old_files.append(file_path)
+
+    response = apply(client, pack(payload))
+    assert response.status_code == 200, response.text
+
+    remaining_safety = list(backups_dir.glob("tracker-before-restore-*.zip"))
+    assert len(remaining_safety) == 5
+    assert not old_files[0].exists()
+    assert not old_files[1].exists()
+    assert not old_files[2].exists()
 
 
 def test_openapi_binary_upload_and_download_contract(client):
