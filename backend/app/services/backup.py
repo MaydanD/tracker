@@ -191,6 +191,23 @@ def check_token(raw: bytes, token: str, key: bytes) -> None:
     require(valid, "Сначала проверьте этот файл заново: подтверждение отсутствует или устарело.")
 
 
+SAFETY_RETENTION = 5
+
+
+def _prune_safety_backups(directory) -> None:
+    """Retain the 5 most recent safety backups to prevent unconstrained disk growth."""
+    safety_files = sorted(
+        directory.glob("tracker-before-restore-*.zip"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    for old_path in safety_files[SAFETY_RETENTION:]:
+        try:
+            old_path.unlink(missing_ok=True)
+        except OSError:
+            logger.warning("Could not delete old safety backup %s", old_path)
+
+
 def _write_safety(raw: bytes, settings, moment: datetime) -> str:
     directory = settings.resolved_backups_dir
     directory.mkdir(parents=True, exist_ok=True)
@@ -225,6 +242,7 @@ def restore(database, data: BackupDataV1, settings, moment: datetime) -> str:
                 for offset in range(0, len(rows), 1000):
                     session.execute(table.insert(), [row.model_dump() for row in rows[offset:offset + 1000]])
             session.commit()
+            _prune_safety_backups(settings.resolved_backups_dir)
             return safety
     except Exception as exc:
         logger.exception("Logical restore rolled back")

@@ -45,7 +45,9 @@ def expected_revision() -> str | None:
     from alembic.script import ScriptDirectory
 
     try:
-        script = ScriptDirectory.from_config(Config(str(ALEMBIC_INI)))
+        config = Config(str(ALEMBIC_INI))
+        config.set_main_option("script_location", str(ALEMBIC_INI.parent / "alembic"))
+        script = ScriptDirectory.from_config(config)
         return script.get_current_head()
     except Exception:  # pragma: no cover - defensive: unreadable migrations
         logger.warning("Could not read the Alembic script directory", exc_info=True)
