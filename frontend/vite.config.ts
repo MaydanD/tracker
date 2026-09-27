@@ -20,10 +20,7 @@ export default defineConfig(() => {
     plugins: [react()],
     server: {
       port: DEV_SERVER_PORT,
-      // Not strict on purpose: if another project already holds the port the
-      // dev server moves to the next free port instead of failing. The /api
-      // proxy below is what the app needs, and it is port-independent.
-      strictPort: false,
+      strictPort: true,
       proxy: {
         '/api': { target: apiTarget, changeOrigin: true },
       },

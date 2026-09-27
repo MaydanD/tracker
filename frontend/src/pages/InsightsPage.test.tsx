@@ -204,6 +204,14 @@ describe('InsightsPage', () => {
     expect(within(panel).getByText('Подробнее о доказательствах')).toBeInTheDocument()
   })
 
+  it('can open the top-ranked graph by default for the analytics page', async () => {
+    setup()
+    render(<InsightsPage today={TODAY} openFirstInsight />)
+
+    expect(await screen.findByRole('region', { name: 'Графики' })).toBeInTheDocument()
+    expect(screen.getByTestId(`chart-series-${MAIN.x.key}`)).toBeInTheDocument()
+  })
+
   it('compares groups for a boolean pair instead of drawing a scatter', async () => {
     renderPage()
     const card = await screen.findByTestId(`insight-${BOOLEAN.fingerprint.slice(0, 8)}`)

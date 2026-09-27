@@ -30,11 +30,16 @@ def read_dashboard(session: DbSession, clock: ClockDep) -> dict[str, object]:
     "/calendar",
     response_model=list[CalendarDaySummaryRead],
     summary="Calendar range summary",
-    description="Returns day summaries for the requested date range (start to end inclusive).",
+    description=(
+        "Returns day summaries for the requested date range (start to end inclusive). "
+        "Set include_trends=true to include explicit done/missed scores grouped by "
+        "habit and sphere."
+    ),
 )
 def read_calendar(
     start: date = Query(..., description="Start date (YYYY-MM-DD)"),
     end: date = Query(..., description="End date (YYYY-MM-DD)"),
+    include_trends: bool = Query(False, description="Include recorded habit and sphere scores."),
     session: DbSession = None,
     clock: ClockDep = None,
 ) -> list[dict[str, object]]:
@@ -49,7 +54,9 @@ def read_calendar(
             detail="Запрошенный диапазон превышает допустимый предел (400 дней).",
         )
     today = clock.today()
-    return service.get_calendar_range(session, start, end, today=today)
+    return service.get_calendar_range(
+        session, start, end, today=today, include_trends=include_trends,
+    )
 
 
 @router.get(

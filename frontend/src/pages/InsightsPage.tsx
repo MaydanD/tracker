@@ -15,7 +15,7 @@ import type {
 } from '../api/insights'
 import { EmptyState, ErrorBanner, InfoBanner, LoadingText } from '../components/Feedback'
 import { OwlAssistantBanner } from '../components/owl/OwlAssistantBanner'
-import { setOwl } from '../components/owl/owlStore'
+import { setAnalyticsOwl, setOwl } from '../components/owl/owlStore'
 import { InsightCard } from '../components/insights/InsightCard'
 import { InsightDetail } from '../components/insights/InsightDetail'
 import { InsightFilters } from '../components/insights/InsightFilters'
@@ -64,9 +64,16 @@ interface Props {
    * pin it so period presets become deterministic.
    */
   today?: string
+  openFirstInsight?: boolean
+  embedded?: boolean
 }
 
-export function InsightsPage({ today: pinnedToday }: Props = {}) {
+export function InsightsPage({
+  today: pinnedToday,
+  openFirstInsight = false,
+  embedded = false,
+}: Props = {}) {
+  const autoOpenedQuery = useRef('')
   const [baseToday] = useState(() => pinnedToday ?? isoDate(new Date()))
   const [range, setRange] = useState(() => rangeFor(DEFAULT_PRESET, baseToday))
   const [filters, setFilters] = useState<FiltersState>({
@@ -174,12 +181,20 @@ export function InsightsPage({ today: pinnedToday }: Props = {}) {
 
   const analytics: InsightAnalyticsRead | null = feed.data?.key === queryKey && feed.error === null ? feed.data.value : null
 
-  // Publish the insight Owl to the shared header mascot.
   useEffect(() => {
-    setOwl(analytics?.owl ?? null)
-  }, [analytics?.owl?.fingerprint])
+    if (analytics !== null) {
+      setAnalyticsOwl(analytics.owl)
+      setOwl(analytics.owl)
+    }
+  }, [analytics])
 
   const insights = query.variables?.length === 0 ? [] : analytics?.insights ?? []
+  useEffect(() => {
+    const first = insights[0]
+    if (!openFirstInsight || autoOpenedQuery.current === queryKey || selected !== null || first === undefined) return
+    autoOpenedQuery.current = queryKey
+    setSelected({ candidate: first, query })
+  }, [openFirstInsight, insights, selected, query, queryKey])
   const counts = analytics?.summary.counts ?? null
   const labelFor = (key: string) => catalogue.data?.variables.find((variable) => variable.key === key)?.label ?? 'Показатель'
   const explorerPair = explorer.active ? `${labelFor(explorer.x)} — ${labelFor(explorer.y)}` : null
@@ -187,15 +202,18 @@ export function InsightsPage({ today: pinnedToday }: Props = {}) {
 
   return (
     <section className="page">
-      <header className="page__header">
-        <h1 className="page__title">Аналитика</h1>
-      </header>
-      <p className="page__summary">
-        Связи в ваших данных: что видно в истории, насколько это подтверждено и какие
-        ограничения у каждого наблюдения.
-      </p>
-
-      <OwlAssistantBanner state={analytics?.owl ?? null} />
+      {!embedded ? (
+        <>
+          <header className="page__header">
+            <h1 className="page__title">Аналитика</h1>
+          </header>
+          <p className="page__summary">
+            Связи в ваших данных: что видно в истории, насколько это подтверждено и какие
+            ограничения у каждого наблюдения.
+          </p>
+          <OwlAssistantBanner state={analytics?.owl ?? null} />
+        </>
+      ) : null}
 
       <InsightFilters
         state={{ ...filters, start: range.start, end: range.end }}

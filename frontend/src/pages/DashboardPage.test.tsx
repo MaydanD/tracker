@@ -2,17 +2,15 @@ import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { jsonResponse, stubApi } from '../test/fetchStub'
-import { recordsPreviewFixture } from '../test/recordsFixture'
 import { DashboardPage } from './DashboardPage'
 
 const TODAY = '2026-09-25'
-const YESTERDAY = '2026-09-24'
 
 function mockDashboardData(overrides: Record<string, unknown> = {}) {
   return {
     today: TODAY,
     today_progress: {
-      score: 100.0,
+      score: 100,
       completed_weight: 2,
       required_weight: 2,
       entry_date: TODAY,
@@ -50,24 +48,7 @@ function mockDashboardData(overrides: Record<string, unknown> = {}) {
       { habit_id: 1, current_streak: 12, unit: 'days', as_of: TODAY },
       { habit_id: 2, current_streak: 4, unit: 'weeks', as_of: TODAY },
     ],
-    yesterday_state: {
-      id: 1,
-      state_date: YESTERDAY,
-      created_at: '2026-09-24T20:00:00',
-      updated_at: '2026-09-24T20:00:00',
-      mood: 4,
-      energy: 3,
-      wellbeing: 4,
-      sleep_status: 'underslept',
-      sleep_minutes: 380,
-      alcohol: false,
-      alcohol_detail: null,
-      gaming: null, // Tri-state: unspecified! Must NOT show "Нет"
-      gaming_minutes: null,
-      computer_overuse: true,
-      computer_minutes: 480,
-      note: 'Хороший вечер',
-    },
+    yesterday_state: null,
     today_items: [
       {
         habit_id: 1,
@@ -105,113 +86,135 @@ function mockDashboardData(overrides: Record<string, unknown> = {}) {
   }
 }
 
-describe('DashboardPage', () => {
-  it('renders Dashboard with Today, Week, Streaks, and Yesterday State in Russian', async () => {
-    stubApi({
-      'GET /api/dashboard': () => jsonResponse(mockDashboardData()),
-    })
+function stubDashboard(overrides: Record<string, unknown> = {}) {
+  stubApi({
+    'GET /api/dashboard': () => jsonResponse(mockDashboardData(overrides)),
+    'GET /api/calendar': () => jsonResponse([
+      {
+        entry_date: '2026-09-24',
+        daily_score: 40,
+        completed_weight: 2,
+        required_weight: 5,
+        has_obligations: true,
+        has_daily_state: false,
+        mood: null,
+        is_future: false,
+        area_scores: [{ area_id: 1, name: 'Здоровье', color: '#4a7cc7', score: 40 }],
+        habit_scores: [],
+      },
+      {
+        entry_date: TODAY,
+        daily_score: 75,
+        completed_weight: 3,
+        required_weight: 4,
+        has_obligations: true,
+        has_daily_state: false,
+        mood: null,
+        is_future: false,
+        area_scores: [{ area_id: 1, name: 'Здоровье', color: '#4a7cc7', score: 75 }],
+        habit_scores: [],
+      },
+    ]),
+  })
+}
 
+describe('DashboardPage', () => {
+  it('shows the owl composition, a real colored area trend, week progress and compact streaks', async () => {
+    stubDashboard()
+    const { container } = render(<DashboardPage />)
+
+    expect(await screen.findByText('Пока без особых новостей.')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Главный обзор' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Обзор вашей активности:/)).not.toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Сова-помощник' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Заполнить' })).not.toBeInTheDocument()
+    const page = container.querySelector('.dashboard-page')
+    expect(page?.firstElementChild).toHaveClass('dashboard-character')
+    expect(page?.querySelector('.dashboard-message--quiet')).toBeInTheDocument()
+    expect(page?.querySelector('.dashboard-trends')).toBeInTheDocument()
+    expect(page?.querySelector('.dashboard-week')).toBeInTheDocument()
+    expect(page?.querySelector('.dashboard-streaks')).toBeInTheDocument()
+    expect(page?.textContent).not.toMatch(/Вчера|Сегодня/)
+
+    const trends = await screen.findByRole('region', { name: 'Динамика по сферам' })
+    expect(within(trends).getByRole('img', {
+      name: 'Оценка выполнения привычек по сферам за последние 30 дней',
+    })).toBeInTheDocument()
+    expect(within(trends).getByRole('list')).toHaveTextContent('Здоровье')
+    expect(trends.querySelector('path[data-area-id="1"]')).toHaveAttribute('stroke', '#4a7cc7')
+
+    const week = screen.getByRole('region', { name: 'Прогресс недели' })
+    expect(within(week).getByText('66,7%')).toBeInTheDocument()
+    expect(within(week).getByText('2 / 3 по весу')).toBeInTheDocument()
+    expect(within(week).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '66.7')
+
+    const streaks = screen.getByRole('region', { name: 'Текущие серии' })
+    expect(within(streaks).getByText('Чтение')).toBeInTheDocument()
+    expect(within(streaks).getByText('🔥 12 дней')).toBeInTheDocument()
+    expect(within(streaks).getByText('Тренировка')).toBeInTheDocument()
+    expect(within(streaks).getByText('🔥 4 недели')).toBeInTheDocument()
+  })
+
+  it('shows the current owl message and no fill action for a fully marked day', async () => {
+    stubDashboard({
+      owl: {
+        owl_id: 'all_completed',
+        asset_key: 'owl_all_done',
+        tone: 'celebratory',
+        priority: 70,
+        caption_line1: 'Ну вот. Можешь жить.',
+        caption_line2: 'Все обязательные привычки на сегодня выполнены — 100%.',
+        dismissible: false,
+        fingerprint: 'abc123',
+        context: 'dashboard',
+        fallback_line1: null,
+      },
+    })
     render(<DashboardPage />)
 
-    expect(await screen.findByRole('heading', { name: 'Главный обзор' })).toBeInTheDocument()
+    const message = await screen.findByTestId('owl-banner')
+    expect(message).toHaveClass('owl-banner--dashboard')
+    expect(within(message).getByText('Ну вот. Можешь жить.')).toBeInTheDocument()
+    expect(within(message).getByText('Все обязательные привычки на сегодня выполнены — 100%.')).toBeInTheDocument()
+    expect(within(message).queryByRole('link', { name: 'Заполнить' })).not.toBeInTheDocument()
+  })
 
-    // Today section
-    const todayRegion = screen.getByRole('region', { name: 'Сегодня' })
-    expect(todayRegion).toBeInTheDocument()
-    expect(within(todayRegion).getByText('Чтение')).toBeInTheDocument()
-    expect(within(todayRegion).getByText('100%')).toBeInTheDocument()
-    expect(within(todayRegion).getByRole('link', { name: 'Перейти в Итоги дня →' })).toHaveAttribute(
+  it.each([
+    ['не заполненном', null],
+    ['частично заполненном', 'done'],
+  ])('offers the check-in action for a %s day', async (_description, firstEntryStatus) => {
+    stubDashboard({
+      owl: {
+        owl_id: 'pending',
+        asset_key: 'owl_pending',
+        tone: 'cautionary',
+        priority: 20,
+        caption_line1: 'Эй, отметь привычку!',
+        caption_line2: 'Остались незаполненные отметки.',
+        dismissible: false,
+        fingerprint: 'pending-abc',
+        context: 'dashboard',
+        fallback_line1: null,
+      },
+      today_progress: {
+        score: 50,
+        completed_weight: 1,
+        required_weight: 2,
+        entry_date: TODAY,
+        obligations: [
+          { habit_id: 1, name: 'Чтение', weight: 1, entry_status: firstEntryStatus, satisfied: firstEntryStatus !== null },
+          { habit_id: 2, name: 'Прогулка', weight: 1, entry_status: null, satisfied: false },
+        ],
+      },
+    })
+    render(<DashboardPage />)
+
+    const message = await screen.findByTestId('owl-banner')
+    expect(within(message).getByText('Эй, отметь привычку!')).toBeInTheDocument()
+    expect(within(message).getByRole('link', { name: 'Заполнить' })).toHaveAttribute(
       'href',
       `#/check-in?date=${TODAY}`,
     )
-
-    // Week section
-    const weekRegion = screen.getByRole('region', { name: 'Эта неделя' })
-    expect(weekRegion).toBeInTheDocument()
-    expect(within(weekRegion).getByText('Тренировка')).toBeInTheDocument()
-    expect(within(weekRegion).getByText(/Квота: 2 \/ 3/)).toBeInTheDocument()
-    expect(within(weekRegion).getByText(/Предпочтительно: Пн, Ср, Пт/)).toBeInTheDocument()
-    expect(within(weekRegion).getByText('В процессе')).toBeInTheDocument()
-
-    // Streaks section
-    const streaksRegion = screen.getByRole('region', { name: 'Текущие серии' })
-    expect(streaksRegion).toBeInTheDocument()
-    expect(within(streaksRegion).getByText('🔥 12 дней')).toBeInTheDocument()
-    expect(within(streaksRegion).getByText('🔥 4 недели')).toBeInTheDocument()
-
-    // Yesterday section
-    const yesterdayRegion = screen.getByRole('region', { name: 'Вчерашнее состояние' })
-    expect(yesterdayRegion).toBeInTheDocument()
-    expect(within(yesterdayRegion).getAllByText('4 / 5')).toHaveLength(2) // mood and wellbeing
-    expect(within(yesterdayRegion).getByText('Недосып · 6 ч 20 мин')).toBeInTheDocument()
-    expect(within(yesterdayRegion).getByText('Нет')).toBeInTheDocument() // alcohol is false
-    expect(within(yesterdayRegion).getByText('Слишком много · 8 ч')).toBeInTheDocument()
-    expect(within(yesterdayRegion).getByText('Хороший вечер')).toBeInTheDocument()
-  })
-
-  it('renders "Состояние вчера не заполнено" when yesterday state is null', async () => {
-    stubApi({
-      'GET /api/dashboard': () => jsonResponse(mockDashboardData({ yesterday_state: null })),
-    })
-
-    render(<DashboardPage />)
-
-    expect(await screen.findByText('Состояние вчера не заполнено')).toBeInTheDocument()
-  })
-
-  it('shows a compact records preview with a link to all records', async () => {
-    stubApi({
-      'GET /api/dashboard': () => jsonResponse(mockDashboardData({
-        records: recordsPreviewFixture(),
-      })),
-    })
-
-    render(<DashboardPage />)
-
-    const region = await screen.findByRole('region', { name: 'Рекорды' })
-    expect(within(region).getByText('Чтение — 28 дней')).toBeInTheDocument()
-    expect(within(region).getByText(/Месяц без отрыва/)).toBeInTheDocument()
-    expect(within(region).getByText('4 из 12')).toBeInTheDocument()
-    expect(within(region).getByRole('link', { name: 'Все рекорды →' })).toHaveAttribute(
-      'href', '#/records',
-    )
-  })
-
-  it('hides the records preview when the backend sends none', async () => {
-    stubApi({ 'GET /api/dashboard': () => jsonResponse(mockDashboardData()) })
-
-    render(<DashboardPage />)
-
-    expect(await screen.findByRole('heading', { name: 'Главный обзор' })).toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'Рекорды' })).toBeNull()
-  })
-
-  it('shows the contextual Owl banner above the cards', async () => {
-    stubApi({
-      'GET /api/dashboard': () =>
-        jsonResponse(mockDashboardData({
-          owl: {
-            owl_id: 'all_completed',
-            asset_key: 'owl_all_done',
-            tone: 'celebratory',
-            priority: 70,
-            caption_line1: 'Ну вот. Можешь жить.',
-            caption_line2: 'Все обязательные привычки на сегодня выполнены — 100%.',
-            dismissible: true,
-            fingerprint: 'abc123',
-            context: 'dashboard',
-            fallback_line1: null,
-          },
-        })),
-    })
-
-    render(<DashboardPage />)
-
-    const banner = await screen.findByTestId('owl-banner')
-    expect(within(banner).getByText('Ну вот. Можешь жить.')).toBeInTheDocument()
-    expect(
-      within(banner).getByText('Все обязательные привычки на сегодня выполнены — 100%.'),
-    ).toBeInTheDocument()
-    expect(within(banner).getByRole('img', { name: 'Сова-помощник' })).toBeInTheDocument()
+    expect(within(message).queryByRole('button', { name: 'Скрыть' })).not.toBeInTheDocument()
   })
 })

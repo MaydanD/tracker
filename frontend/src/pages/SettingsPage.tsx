@@ -96,7 +96,7 @@ export function SettingsPage() {
         </section>
         <section className="card" aria-labelledby="backup-title">
           <h2 id="backup-title">Резервная копия</h2>
-          <p>Полная история: сферы, привычки и их настройки, отметки, состояния дня, эксперименты и снимки инсайтов. Рекорды и достижения пересчитаются после восстановления.</p>
+          <p>Полная история: сферы, привычки и их настройки, отметки, состояния дня, эксперименты и снимки аналитики. Рекорды пересчитаются после восстановления.</p>
           <button className="button" disabled={busy !== null} onClick={() => void download('backup')}>Скачать резервную копию</button>
         </section>
         <section className="card" aria-labelledby="export-title">

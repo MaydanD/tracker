@@ -1,8 +1,9 @@
 # Stage 11 — Records & Achievements
 
-Stage 11 добавляет слой долгосрочного прогресса: пользователь видит свои **реальные
-личные рекорды, вехи и достижения**, полученные **из уже существующих данных**
-Tracker.
+Stage 11 добавляет слой долгосрочного прогресса: backend вычисляет **реальные
+личные рекорды, вехи и достижения** из уже существующих данных Tracker. В текущем
+UI показываются только привычко-зависимые рекорды в аналитике; карточки достижений
+не отображаются.
 
 Это **presentation/domain layer поверх существующей истории**, а не новая
 параллельная система истины. Рекорды и достижения вычисляются детерминированно из
@@ -142,9 +143,12 @@ Stable identity — `habit_id`; текущее display name берётся из 
 
 ## Experiments и Insights
 
-Experiments: Records page показывает число созданных и завершённых экспериментов и
-achievements вокруг них; отдельного record-analytics движка нет. Insights:
-достижения используют snapshots (см. выше), новых статистических вычислений нет.
+Experiments: the records response includes created/completed experiment counts and
+the backend achievement catalogue; there is no separate record-analytics engine.
+Insights achievements use snapshots (see above), with no new statistical
+calculations. The current frontend does not display achievement cards or a
+standalone records page; Analytics only surfaces habit-related records beside
+the charts.
 
 ## API
 
@@ -152,9 +156,9 @@ achievements вокруг них; отдельного record-analytics движ
 | --- | --- | --- |
 | `GET` | `/api/records` | `summary`, `records`, `achievements`, `recent_achievements`, `achieved_count`, `total_count`. |
 
-Dashboard включает компактный `records: RecordsPreviewRead | null` в
-`GET /api/dashboard` (top record + latest achievement + `X из Y`). Отдельного
-endpoint на каждый record нет.
+`GET /api/dashboard` still includes the compact `records: RecordsPreviewRead | null`
+for API compatibility. The frontend no longer renders that preview. There is no
+endpoint for each individual record.
 
 ## Performance
 
@@ -175,10 +179,10 @@ celebration не перебивает более важные события. St
 
 ## Frontend
 
-`/#/records` («Рекорды и достижения»): общая статистика, карточки личных рекордов
-(включая consistency), достижения, сгруппированные в «Недавно получено» /
-полученные / «Следующие цели» с progress-барами. Компактный `RecordsPreviewCard`
-на Dashboard. UI полностью русский; raw enum keys и unit-идентификаторы не
+`/#/analytics` combines activity charts, insight graphs, habit-specific records
+(longest streak and consistency) and the calendar/heatmap. Old `/#/records`
+bookmarks redirect there. Achievement cards and the Dashboard records preview
+are not rendered. UI полностью русский; raw enum keys и unit-идентификаторы не
 печатаются. Новых картинок и тяжёлых icon library нет — только CSS.
 
 ## Гарантии

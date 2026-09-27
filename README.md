@@ -29,10 +29,12 @@ day and the most consistent month per habit, plus a short static catalogue of re
 achievements with honest historical dates and progress toward locked goals.
 Nothing is stored — there is no records table, no mutable counter and no new
 migration — so a record is a projection of the data, never a second source of
-truth. The Records page is at `/#/records`, the dashboard shows a compact preview,
-and the Owl celebrates a new streak record by reusing its existing artwork. See
-the [records contract](docs/records.md); the [experiments contract](docs/experiments.md)
-and the [Owl contract](docs/owl-assistant.md) still hold.
+truth. The Analytics screen at `/#/analytics` keeps habit-specific records next
+to the activity graphs; records and achievement cards are no longer shown on the
+dashboard or in a separate screen. The read-only records API and Owl's existing
+new-streak artwork remain. See the [records contract](docs/records.md); the
+[experiments contract](docs/experiments.md) and the [Owl contract](docs/owl-assistant.md)
+still hold.
 
 ---
 
@@ -58,16 +60,17 @@ and the [Owl contract](docs/owl-assistant.md) still hold.
   weighted daily/weekly score and current day/week streaks on «Итоги дня».
 - **Daily State**: optional mood, energy, wellbeing, sleep, alcohol, gaming,
   computer time and a separate day note, with explicit unspecified/no/yes choices.
-- **Dashboard & Calendar**: main dashboard with today's & weekly scores and weight,
-  active daily/weekly streaks, weekly quota progress, yesterday's daily state,
-  a Monday-first monthly calendar with cell scores and mood indicators,
-  interactive day cards with direct navigation to «Итоги дня», and an annual heatmap
-  using Stage 4 daily scores.
+- **Dashboard & Analytics**: main dashboard with today's & weekly scores and weight,
+  active daily/weekly streaks, weekly quota progress and yesterday's daily state.
+  The combined Analytics screen has 90-day trends for completion, mood, recorded
+  habits and spheres; statistical insight charts; habit-specific records; a
+  Monday-first calendar with day details; and the annual heatmap.
 - **Insights / Analytics**: aggregated discovery, an explicit pair explorer, evidence
   and caveats, SVG charts and daily history snapshots. `GET /api/analytics/insights`,
   detail/history/catalogue endpoints and explicit `POST /api/analytics/insights/refresh`.
 - **Owl assistant**: one contextual `owl` state embedded in the dashboard and insight
-  responses, rendered as a reusable `OwlAssistantBanner` on both pages. Uses the six
+  responses, rendered as a reusable `OwlAssistantBanner` on the dashboard and Analytics.
+  Uses the six
   existing PNGs, keeps a stable fingerprint for session dismiss, and downgrades
   sarcasm for 24 hours client-side — no new table and no duplicated analytics.
 - **Experiments**: define a bounded personal experiment (title, hypothesis,
@@ -78,11 +81,11 @@ and the [Owl contract](docs/owl-assistant.md) still hold.
   and `POST /api/experiments/{id}/cancel`. Comparisons reuse the canonical
   dataset: no second statistics engine, no causal claims, missing days never
   become zeros.
-- **Records & Achievements**: derived personal bests — longest streak, best day,
+- **Records API**: derived personal bests — longest streak, best day,
   best completed week with coverage, most habits done in a day, and best elapsed
   month per habit — and a static 17-entry achievement catalogue with stable keys,
-  real first-reached dates, and progress toward locked goals. `GET /api/records`,
-  a compact `records` block on the dashboard, and a Russian `/#/records` page. No
+  real first-reached dates, and progress toward locked goals. `GET /api/records`
+  remains read-only; the UI only presents habit-related records in Analytics. No
   counters and no migration: everything is computed from the existing history,
   missing days are never failures, and archived habits keep their records.
 - **Descriptive analytics API**: `GET /api/analytics/descriptive` with explicit
@@ -107,9 +110,8 @@ and the [Owl contract](docs/owl-assistant.md) still hold.
   temporal blocking and Benjamini–Hochberg FDR across the whole analysis family,
   with per-check statuses, typed blocking reasons and Russian labels. One dataset
   build per request; blocked hypotheses stay in the response.
-- React + TypeScript + Vite shell with working Главная, Итоги дня, Календарь, Habits and Areas
-  screens, sidebar navigation for all planned screens, and an always-visible
-  backend/health indicator.
+- React + TypeScript + Vite shell with working Обзор, Итоги дня, Привычки,
+  Аналитика, Эксперименты and Настройки screens.
 - Backend tests (pytest) and frontend tests (Vitest) that never touch your real
   database, plus a TypeScript-checked production build.
 
@@ -197,10 +199,9 @@ Open <http://localhost:17373>. The Vite dev server proxies `/api` to the backend
 so the browser only ever talks to one origin and the header status should read
 **Connected** with `Database: ok`.
 
-The dev server deliberately uses port **17373** instead of Vite's default 5173 so
-it does not collide with other Vite projects; the backend CORS default matches it.
-If that port is taken too, Vite automatically picks the next free port — watch the
-terminal output for the URL. If you move the backend to a
+The dev server always uses port **17373** instead of Vite's default 5173; the
+backend CORS default matches it. If that port is already in use, Vite exits with
+an error rather than silently switching to another port. If you move the backend to a
 different port, start Vite with
 `$env:VITE_API_PROXY_TARGET='http://127.0.0.1:8001'; npm run dev`.
 
@@ -403,7 +404,7 @@ notes, past-day editing, the future planned-skip rules and clearing a record.
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /api/dashboard` | Main dashboard summary: today score/weight/habits, current week score/quota progress, active streaks, yesterday's Daily State, Owl and a compact records preview |
-| `GET /api/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD` | Aggregated date range summary for monthly calendar and yearly heatmap (daily score, obligations, mood indicator) |
+| `GET /api/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD` | Aggregated date range summary for monthly calendar and yearly heatmap (daily score, obligations, mood indicator); `include_trends=true` also returns recorded habit and sphere scores |
 | `GET /api/days/{YYYY-MM-DD}/overview` | Aggregated overview for a day card: daily score, habit entry details, and Daily State summary |
 
 ### Records (Stage 11)

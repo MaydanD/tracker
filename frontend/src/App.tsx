@@ -1,16 +1,14 @@
-import { HashRouter, Route, Routes } from 'react-router-dom'
+import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import { AppShell } from './layout/AppShell'
 import { AreasPage } from './pages/AreasPage'
-import { CalendarPage } from './pages/CalendarPage'
+import { AnalyticsPage } from './pages/AnalyticsPage'
 import { CheckInPage } from './pages/CheckInPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { ExperimentDetailPage } from './pages/ExperimentDetailPage'
 import { ExperimentsPage } from './pages/ExperimentsPage'
 import { HabitsPage } from './pages/HabitsPage'
-import { InsightsPage } from './pages/InsightsPage'
 import { NotFoundPage } from './pages/NotFoundPage'
-import { RecordsPage } from './pages/RecordsPage'
 import { SettingsPage } from './pages/SettingsPage'
 
 /**
@@ -25,13 +23,14 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route index element={<DashboardPage />} />
           <Route path="check-in" element={<CheckInPage />} />
-          <Route path="calendar" element={<CalendarPage />} />
+          <Route path="calendar" element={<Navigate to="/analytics" replace />} />
           <Route path="habits" element={<HabitsPage />} />
           <Route path="areas" element={<AreasPage />} />
-          <Route path="insights" element={<InsightsPage />} />
+          <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="insights" element={<Navigate to="/analytics" replace />} />
           <Route path="experiments" element={<ExperimentsPage />} />
           <Route path="experiments/:experimentId" element={<ExperimentDetailPage />} />
-          <Route path="records" element={<RecordsPage />} />
+          <Route path="records" element={<Navigate to="/analytics" replace />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

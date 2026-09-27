@@ -20,7 +20,11 @@ import {
 } from '../utils/dateUtils'
 import { formatMinutes, formatSleepStatus } from '../utils/formatters'
 
-export function CalendarPage() {
+interface CalendarPageProps {
+  embedded?: boolean
+}
+
+export function CalendarPage({ embedded = false }: CalendarPageProps) {
   const now = new Date()
   const [currentYear, setCurrentYear] = useState(() => now.getFullYear())
   const [currentMonth, setCurrentMonth] = useState(() => now.getMonth() + 1)
@@ -160,13 +164,17 @@ export function CalendarPage() {
   }
 
   return (
-    <section className="page calendar-page">
-      <header className="page__header">
-        <h1 className="page__title">Календарь и тепловая карта</h1>
-      </header>
-      <p className="page__summary">
-        Просматривайте историю выполнений по месяцам и за весь год. Выберите любой день для просмотра деталей.
-      </p>
+    <section className={`page calendar-page${embedded ? ' calendar-page--embedded' : ''}`}>
+      {!embedded ? (
+        <>
+          <header className="page__header">
+            <h1 className="page__title">Календарь и тепловая карта</h1>
+          </header>
+          <p className="page__summary">
+            Просматривайте историю выполнений по месяцам и за весь год. Выберите любой день для просмотра деталей.
+          </p>
+        </>
+      ) : null}
 
       {/* Section 1: Месячный календарь */}
       <section className="calendar-section" aria-label="Месячный календарь">

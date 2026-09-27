@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.owl import OwlState
 from app.schemas.daily import DayItemRead
@@ -28,6 +28,22 @@ class DashboardRead(ReadModel):
     records: RecordsPreviewRead | None = None
 
 
+class CalendarAreaScoreRead(ReadModel):
+    area_id: int
+    name: str
+    color: str
+    score: float
+
+
+class CalendarHabitScoreRead(ReadModel):
+    habit_id: int
+    name: str
+    area_id: int
+    area_name: str
+    color: str
+    score: float
+
+
 class CalendarDaySummaryRead(ReadModel):
     entry_date: date
     daily_score: float | None
@@ -37,6 +53,8 @@ class CalendarDaySummaryRead(ReadModel):
     has_daily_state: bool
     mood: int | None
     is_future: bool
+    area_scores: list[CalendarAreaScoreRead] = Field(default_factory=list)
+    habit_scores: list[CalendarHabitScoreRead] = Field(default_factory=list)
 
 
 class DayOverviewRead(ReadModel):

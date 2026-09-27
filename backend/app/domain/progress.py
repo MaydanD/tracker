@@ -29,6 +29,7 @@ class Version:
     name: str
     weight: int
     schedule: Schedule
+    area_id: int | None = None
 
 
 @dataclass(frozen=True)

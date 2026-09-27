@@ -7,6 +7,39 @@
   margin-bottom: 10px;
 }
 
+.insight-filters select,
+.insight-filters input,
+.insight-explorer select {
+  min-height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 6px 10px;
+}
+
+.insight-filters select:focus,
+.insight-filters input:focus,
+.insight-explorer select:focus {
+  border-color: var(--color-accent);
+  outline: 3px solid rgba(47, 111, 208, 0.14);
+}
+
+.insight-toolbar .button,
+.insight-panel > .button,
+.insight-detail__header > .button {
+  border-radius: 999px;
+  padding: 7px 14px;
+  transition: background-color 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.insight-toolbar .button:not(:disabled):hover,
+.insight-panel > .button:not(:disabled):hover,
+.insight-detail__header > .button:not(:disabled):hover {
+  background: #eef4fc;
+  transform: translateY(-1px);
+}
+
 .insight-explorer {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);

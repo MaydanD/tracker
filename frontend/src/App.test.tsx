@@ -53,9 +53,7 @@ describe('App shell', () => {
 
     render(<App />)
 
-    expect(
-      await screen.findByRole('heading', { name: 'Главный обзор', level: 1 }),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Прогресс недели' })).toBeInTheDocument()
   })
 
   it('reports a connected backend with the reported version', async () => {
@@ -128,17 +126,42 @@ describe('App shell', () => {
     expect(screen.getByRole('status')).toHaveTextContent('python -m app')
   })
 
-  it('navigates to the implemented analytics screen', async () => {
+  it('navigates to the combined analytics screen', async () => {
     stubHealthyBackend()
 
     render(<App />)
-    fireEvent.click(screen.getByRole('link', { name: /инсайты/i }))
+    fireEvent.click(screen.getByRole('link', { name: /аналитика/i }))
 
     expect(
       await screen.findByRole('heading', { name: 'Аналитика', level: 1 }),
     ).toBeInTheDocument()
     expect(screen.getByLabelText('Статистические проверки')).toBeInTheDocument()
     expect(screen.queryByText('Запланировано: Этап 8')).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Месячный календарь' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Рекорды привычек' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Календарь' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Рекорды' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Достижения')).not.toBeInTheDocument()
+
+    for (let visit = 0; visit < 2; visit += 1) {
+      fireEvent.click(screen.getByRole('link', { name: 'Обзор' }))
+      expect(await screen.findByRole('region', { name: 'Прогресс недели' })).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('link', { name: 'Аналитика' }))
+      expect(await screen.findByRole('heading', { name: 'Аналитика', level: 1 })).toBeInTheDocument()
+    }
+  })
+
+  it('redirects old calendar and insight bookmarks to analytics', async () => {
+    stubHealthyBackend()
+    window.location.hash = '#/calendar'
+    const view = render(<App />)
+    await waitFor(() => expect(window.location.hash).toBe('#/analytics'))
+    expect(await screen.findByRole('heading', { name: 'Аналитика', level: 1 })).toBeInTheDocument()
+    view.unmount()
+    window.location.hash = '#/insights'
+    render(<App />)
+    await waitFor(() => expect(window.location.hash).toBe('#/analytics'))
+    window.location.hash = '#/'
   })
 
   it('keeps the section title on an experiment detail page', async () => {

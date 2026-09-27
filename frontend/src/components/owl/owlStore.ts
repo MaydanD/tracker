@@ -17,6 +17,8 @@ type Listener = () => void
 const listeners = new Set<Listener>()
 let current: OwlState | null = null
 let loaded = false
+let analyticsOwl: OwlState | null = null
+let analyticsOwlLoaded = false
 let inflight = false
 
 /** Snapshot for `useSyncExternalStore`: a stable reference per value. */
@@ -24,11 +26,28 @@ export function getOwlSnapshot(): OwlState | null {
   return current
 }
 
+export function getAnalyticsOwlSnapshot(): OwlState | null {
+  return analyticsOwl
+}
+
+export function getAnalyticsOwlLoadedSnapshot(): boolean {
+  return analyticsOwlLoaded
+}
+
 export function subscribeOwl(listener: Listener): () => void {
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
   }
+}
+
+/** Publish the Owl from an analytics response without conflating it with Dashboard data. */
+export function setAnalyticsOwl(owl: OwlState | null): void {
+  const unchanged = (analyticsOwl?.fingerprint ?? null) === (owl?.fingerprint ?? null)
+  if (unchanged && analyticsOwlLoaded) return
+  analyticsOwl = owl
+  analyticsOwlLoaded = true
+  for (const listener of listeners) listener()
 }
 
 /** Publish the Owl a page just received. No-op when it is unchanged. */
@@ -61,6 +80,8 @@ export function refreshOwl(): void {
 export function resetOwlStore(): void {
   current = null
   loaded = false
+  analyticsOwl = null
+  analyticsOwlLoaded = false
   inflight = false
   listeners.clear()
 }

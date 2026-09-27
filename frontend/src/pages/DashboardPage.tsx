@@ -3,25 +3,17 @@ import { useEffect } from 'react'
 import { fetchDashboard } from '../api/dashboard'
 import { BackupReminder } from '../components/BackupReminder'
 import { ErrorBanner, LoadingText } from '../components/Feedback'
+import { DashboardAreaTrends } from '../components/dashboard/DashboardAreaTrends'
 import { OwlAssistantBanner } from '../components/owl/OwlAssistantBanner'
+import { resolveOwlAsset } from '../components/owl/owlAssets'
 import { setOwl } from '../components/owl/owlStore'
-import { RecordsPreviewCard } from '../components/records/RecordsPreviewCard'
-import { statusLabel } from '../components/daily/status'
 import { useAsyncData } from '../hooks/useAsyncData'
-import { formatFullDateLabel, formatShortDateLabel } from '../utils/dateUtils'
-import { formatMinutes, formatPreferredWeekdays, formatSleepStatus, formatStreakText } from '../utils/formatters'
-
-const WEEK_STATUS_LABELS: Record<string, string> = {
-  satisfied: 'Выполнено',
-  pending: 'В процессе',
-  failed: 'Не выполнено',
-}
+import { formatShortDateLabel } from '../utils/dateUtils'
+import { formatStreakText } from '../utils/formatters'
 
 export function DashboardPage() {
   const { data, error, loading, reload } = useAsyncData((signal) => fetchDashboard(signal), [])
 
-  // Keep the header mascot in step with the Owl the dashboard already derived;
-  // no second analytics pass and no extra request.
   useEffect(() => {
     if (data) setOwl(data.owl)
   }, [data?.owl?.fingerprint])
@@ -43,239 +35,99 @@ export function DashboardPage() {
     )
   }
 
-  const { today, today_progress, week_progress, streaks, yesterday_state, today_items, owl, records } = data
+  const { today, today_progress, week_progress, streaks, today_items, owl } = data
+  const needsCheckIn = today_progress.obligations.some((obligation) => obligation.entry_status === null)
+  const weekPercent = week_progress.score
+  const weekProgressText = weekPercent === null
+    ? 'Нет запланированных привычек'
+    : `${week_progress.completed_weight} / ${week_progress.required_weight} по весу`
 
   return (
-    <section className="page">
-      <header className="page__header">
-        <h1 className="page__title">Главный обзор</h1>
-      </header>
-      <p className="page__summary">
-        Обзор вашей активности: результаты сегодняшнего дня, прогресс текущей недели,
-        серии выполнений и вчерашнее состояние.
-      </p>
+    <section className="page dashboard-page">
+      <figure className="dashboard-character">
+        <img
+          className="dashboard-character__image"
+          src={resolveOwlAsset(owl?.asset_key ?? 'owl_insight')}
+          alt="Сова-помощник"
+        />
+      </figure>
 
-      <BackupReminder today={today} />
-
-      <OwlAssistantBanner state={owl} />
-
-      <div className="dashboard-grid">
-        {/* Card 1: Сегодня */}
-        <section className="dashboard-card dashboard-card--wide" aria-label="Сегодня">
-          <header className="dashboard-card__header">
-            <h2 className="dashboard-card__title">Сегодня</h2>
-            <span className="badge">{formatFullDateLabel(today)}</span>
-          </header>
-
-          <div className="dashboard-card__score">
-            <span className="dashboard-card__score-value">
-              {today_progress.score === null
-                ? '—'
-                : `${today_progress.score.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}%`}
-            </span>
-            <span className="dashboard-card__score-sub">
-              {today_progress.score === null
-                ? 'Нет обязательных привычек'
-                : `Важность: ${today_progress.completed_weight} / ${today_progress.required_weight}`}
-            </span>
-          </div>
-
-          <h3 className="card__title">Привычки на сегодня</h3>
-          {today_items.length === 0 ? (
-            <p className="loading">На сегодня привычки не запланированы.</p>
-          ) : (
-            <ul className="dashboard-habits-list">
-              {today_items.map((item) => {
-                const statusText = item.entry ? statusLabel(item.entry.status) : 'Нет отметки'
-                const statusClass = item.entry ? `state--${item.entry.status}` : 'state--none'
-                return (
-                  <li key={item.habit_id} className="dashboard-habit-item">
-                    <div className="dashboard-habit-item__main">
-                      <span className="dashboard-habit-item__name">{item.name}</span>
-                      {item.entry?.quantity_value !== null && item.entry?.quantity_value !== undefined ? (
-                        <span className="dashboard-habit-item__meta">
-                          {item.entry.quantity_value} {item.entry.quantity_unit ?? ''}
-                        </span>
-                      ) : null}
-                    </div>
-                    <span className={`state ${statusClass}`}>{statusText}</span>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-
-          <div className="card__actions">
-            <a href={`#/check-in?date=${today}`} className="button button--primary button--small">
-              Перейти в Итоги дня →
+      {owl ? (
+        <OwlAssistantBanner
+          state={owl}
+          variant="dashboard"
+          action={needsCheckIn ? (
+            <a href={`#/check-in?date=${today}`} className="button button--primary dashboard-message__action">
+              Заполнить
             </a>
-          </div>
+          ) : null}
+        />
+      ) : (
+        <section className="dashboard-message dashboard-message--quiet" aria-label="Сова-помощник">
+          <p className="dashboard-message__lead">Пока без особых новостей.</p>
+          <p className="dashboard-message__fact">Отметьте сегодняшний день, чтобы следить за своим прогрессом.</p>
+          {needsCheckIn ? (
+            <a href={`#/check-in?date=${today}`} className="button button--primary dashboard-message__action">
+              Заполнить
+            </a>
+          ) : null}
         </section>
+      )}
 
-        {/* Card 2: Эта неделя */}
-        <section className="dashboard-card dashboard-card--wide" aria-label="Эта неделя">
-          <header className="dashboard-card__header">
-            <h2 className="dashboard-card__title">Эта неделя</h2>
-            <span className="badge">
+      <DashboardAreaTrends today={today} />
+
+      <section className="dashboard-week" aria-label="Прогресс недели">
+        <div className="dashboard-week__summary">
+          <div>
+            <h2 className="dashboard-section-title">Эта неделя</h2>
+            <p className="dashboard-week__dates">
               {formatShortDateLabel(week_progress.week_start)} — {formatShortDateLabel(week_progress.week_end)}
-            </span>
-          </header>
-
-          <div className="dashboard-card__score">
-            <span className="dashboard-card__score-value">
-              {week_progress.score === null
-                ? '—'
-                : `${week_progress.score.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}%`}
-            </span>
-            <span className="dashboard-card__score-sub">
-              {week_progress.score === null
-                ? 'Нет обязательных привычек'
-                : `Важность: ${week_progress.completed_weight} / ${week_progress.required_weight}`}
-            </span>
+            </p>
           </div>
+          <div className="dashboard-week__score">
+            <strong>{weekPercent === null
+              ? '—'
+              : `${weekPercent.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}%`}</strong>
+            <span>{weekProgressText}</span>
+          </div>
+        </div>
+        <div
+          className="dashboard-week__bar"
+          role="progressbar"
+          aria-label="Недельный прогресс"
+          aria-valuemin={weekPercent === null ? undefined : 0}
+          aria-valuemax={weekPercent === null ? undefined : 100}
+          aria-valuenow={weekPercent ?? undefined}
+          aria-valuetext={weekPercent === null ? 'Нет запланированных привычек' : undefined}
+        >
+          <span style={{ width: `${Math.max(0, Math.min(weekPercent ?? 0, 100))}%` }} />
+        </div>
+      </section>
 
-          <h3 className="card__title">Прогресс недельных привычек</h3>
-          {week_progress.habits.length === 0 ? (
-            <p className="loading">Нет недельных привычек.</p>
-          ) : (
-            <ul className="dashboard-habits-list">
-              {week_progress.habits.map((habit) => {
-                const prefDaysText = formatPreferredWeekdays(habit.preferred_weekdays)
-                return (
-                  <li key={habit.habit_id} className="dashboard-habit-item">
-                    <div className="dashboard-habit-item__main">
-                      <span className="dashboard-habit-item__name">{habit.name}</span>
-                      <span className="dashboard-habit-item__meta">
-                        Квота: {habit.completed_count} / {habit.quota}
-                        {prefDaysText ? ` · Предпочтительно: ${prefDaysText}` : ''}
-                      </span>
-                    </div>
-                    <span className={`status-badge status-badge--${habit.status}`}>
-                      {WEEK_STATUS_LABELS[habit.status] ?? habit.status}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </section>
+      <section className="dashboard-streaks" aria-label="Текущие серии">
+        <h2 className="dashboard-section-title">Серии привычек</h2>
+        {streaks.length === 0 ? (
+          <p className="dashboard-streaks__empty">Пока нет активных серий.</p>
+        ) : (
+          <ul className="dashboard-streaks__list">
+            {streaks.map((streak) => {
+              const habitName =
+                today_items.find((item) => item.habit_id === streak.habit_id)?.name ??
+                week_progress.habits.find((habit) => habit.habit_id === streak.habit_id)?.name ??
+                `Привычка #${streak.habit_id}`
+              return (
+                <li key={streak.habit_id} className="dashboard-streak">
+                  <span className="dashboard-streak__name">{habitName}</span>
+                  <span className="dashboard-streak__value">{formatStreakText(streak.current_streak, streak.unit)}</span>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
 
-        {/* Card 3: Текущие серии */}
-        <section className="dashboard-card" aria-label="Текущие серии">
-          <header className="dashboard-card__header">
-            <h2 className="dashboard-card__title">Текущие серии</h2>
-          </header>
-
-          {streaks.length === 0 ? (
-            <p className="loading">Нет активных привычек с сериями.</p>
-          ) : (
-            <ul className="dashboard-habits-list">
-              {streaks.map((s) => {
-                const habitName =
-                  today_items.find((i) => i.habit_id === s.habit_id)?.name ??
-                  week_progress.habits.find((h) => h.habit_id === s.habit_id)?.name ??
-                  `Привычка #${s.habit_id}`
-                return (
-                  <li key={s.habit_id} className="dashboard-streak-item">
-                    <span>{habitName}</span>
-                    <span className="dashboard-streak-item__value">
-                      {formatStreakText(s.current_streak, s.unit)}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </section>
-
-        {/* Stage 11: a compact records block, at most one record + one achievement. */}
-        <RecordsPreviewCard records={records} />
-
-        {/* Card 4: Вчерашнее состояние */}
-        <section className="dashboard-card" aria-label="Вчерашнее состояние">
-          <header className="dashboard-card__header">
-            <h2 className="dashboard-card__title">Вчера</h2>
-          </header>
-
-          {yesterday_state === null ? (
-            <div className="empty">Состояние вчера не заполнено</div>
-          ) : (
-            <div className="state-summary-grid">
-              {yesterday_state.mood !== null && yesterday_state.mood !== undefined ? (
-                <div className="state-summary-item">
-                  <span className="state-summary-item__label">Настроение</span>
-                  <span className="state-summary-item__value">{yesterday_state.mood} / 5</span>
-                </div>
-              ) : null}
-
-              {yesterday_state.energy !== null && yesterday_state.energy !== undefined ? (
-                <div className="state-summary-item">
-                  <span className="state-summary-item__label">Энергия</span>
-                  <span className="state-summary-item__value">{yesterday_state.energy} / 5</span>
-                </div>
-              ) : null}
-
-              {yesterday_state.wellbeing !== null && yesterday_state.wellbeing !== undefined ? (
-                <div className="state-summary-item">
-                  <span className="state-summary-item__label">Самочувствие</span>
-                  <span className="state-summary-item__value">{yesterday_state.wellbeing} / 5</span>
-                </div>
-              ) : null}
-
-              {(yesterday_state.sleep_status || yesterday_state.sleep_minutes !== null) ? (
-                <div className="state-summary-item">
-                  <span className="state-summary-item__label">Сон</span>
-                  <span className="state-summary-item__value">
-                    {formatSleepStatus(yesterday_state.sleep_status)}
-                    {yesterday_state.sleep_minutes !== null
-                      ? ` · ${formatMinutes(yesterday_state.sleep_minutes)}`
-                      : ''}
-                  </span>
-                </div>
-              ) : null}
-
-              {yesterday_state.alcohol !== null && yesterday_state.alcohol !== undefined ? (
-                <div className="state-summary-item">
-                  <span className="state-summary-item__label">Алкоголь</span>
-                  <span className="state-summary-item__value">
-                    {yesterday_state.alcohol
-                      ? `Да${yesterday_state.alcohol_detail ? ` · ${yesterday_state.alcohol_detail}` : ''}`
-                      : 'Нет'}
-                  </span>
-                </div>
-              ) : null}
-
-              {yesterday_state.gaming !== null && yesterday_state.gaming !== undefined ? (
-                <div className="state-summary-item">
-                  <span className="state-summary-item__label">Игры</span>
-                  <span className="state-summary-item__value">
-                    {yesterday_state.gaming
-                      ? formatMinutes(yesterday_state.gaming_minutes)
-                      : 'Нет'}
-                  </span>
-                </div>
-              ) : null}
-
-              {yesterday_state.computer_overuse !== null && yesterday_state.computer_overuse !== undefined ? (
-                <div className="state-summary-item">
-                  <span className="state-summary-item__label">Компьютер</span>
-                  <span className="state-summary-item__value">
-                    {yesterday_state.computer_overuse
-                      ? `Слишком много${yesterday_state.computer_minutes !== null ? ` · ${formatMinutes(yesterday_state.computer_minutes)}` : ''}`
-                      : 'Нормально'}
-                  </span>
-                </div>
-              ) : null}
-
-              {yesterday_state.note ? (
-                <div className="state-summary-item" style={{ gridColumn: '1 / -1' }}>
-                  <span className="state-summary-item__label">Заметка</span>
-                  <span className="state-summary-item__value">{yesterday_state.note}</span>
-                </div>
-              ) : null}
-            </div>
-          )}
-        </section>
+      <div className="dashboard-backup-reminder">
+        <BackupReminder today={today} />
       </div>
     </section>
   )

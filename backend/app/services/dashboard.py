@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.db.models import Area
 from app.db.models.daily_state import DailyState
 from app.domain.progress import Streak, day_progress, streak_summary, week_progress
 from app.schemas.daily import DayItemRead
@@ -19,8 +20,13 @@ from app.services.progress import load_histories
 
 def get_calendar_range(
     session: Session, start_date: date, end_date: date, *, today: date,
+    include_trends: bool = False,
 ) -> list[dict[str, object]]:
     histories = load_histories(session)
+    areas = (
+        {area.id: area for area in session.scalars(select(Area))}
+        if include_trends else {}
+    )
     statement = select(DailyState).where(DailyState.state_date.between(start_date, end_date))
     states_by_date = {s.state_date: s for s in session.scalars(statement)}
 
@@ -32,6 +38,39 @@ def get_calendar_range(
         is_future = curr > today
         has_obligations = dp.required_weight > 0
         daily_score = dp.score if not is_future else None
+        area_totals: dict[int, list[int]] = {}
+        habit_scores: list[dict[str, object]] = []
+        if include_trends and not is_future:
+            for history in histories:
+                version = history.version_on(curr)
+                entry_status = history.entries.get(curr)
+                if version is None or version.area_id is None or entry_status not in {"done", "missed"}:
+                    continue
+                area = areas.get(version.area_id)
+                if area is None:
+                    continue
+                total = area_totals.setdefault(version.area_id, [0, 0])
+                total[1] += 1
+                total[0] += int(entry_status == "done")
+                habit_scores.append({
+                    "habit_id": history.habit_id,
+                    "name": version.name,
+                    "area_id": area.id,
+                    "area_name": area.name,
+                    "color": area.color,
+                    "score": 100.0 if entry_status == "done" else 0.0,
+                })
+        area_scores = [
+            {
+                "area_id": area_id,
+                "name": areas[area_id].name,
+                "color": areas[area_id].color,
+                "score": done / total * 100,
+            }
+            for area_id, (done, total) in sorted(
+                area_totals.items(), key=lambda item: areas[item[0]].name.casefold()
+            )
+        ]
 
         results.append({
             "entry_date": curr,
@@ -42,6 +81,8 @@ def get_calendar_range(
             "has_daily_state": st is not None,
             "mood": st.mood if st is not None else None,
             "is_future": is_future,
+            "area_scores": area_scores,
+            "habit_scores": habit_scores,
         })
         curr += timedelta(days=1)
 

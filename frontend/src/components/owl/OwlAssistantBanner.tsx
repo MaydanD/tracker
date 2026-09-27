@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 
 import type { OwlState, OwlTone } from '../../api/owl'
 import {
@@ -15,6 +16,9 @@ interface Props {
   state: OwlState | null
   /** Inject a storage for tests; defaults to the browser session storage. */
   storage?: KeyValueStorage
+  /** Dashboard keeps the mascot in its own column instead of inside the message. */
+  variant?: 'default' | 'hero' | 'dashboard'
+  action?: ReactNode
 }
 
 interface Shown {
@@ -23,12 +27,12 @@ interface Shown {
 }
 
 /**
- * The contextual Owl: a compact, non-modal banner at the top of the content
- * area. It shows one existing PNG, one emotional line and one factual line.
+ * The contextual Owl: a non-modal message, optionally paired with its existing PNG.
  */
-export function OwlAssistantBanner({ state, storage }: Props) {
+export function OwlAssistantBanner({ state, storage, variant = 'default', action }: Props) {
   const [dismissed, setDismissed] = useState(false)
   const [coolingDown, setCoolingDown] = useState(false)
+  const hasAction = action !== null && action !== undefined
 
   const fingerprint = state?.fingerprint ?? ''
   const tone = state?.tone ?? null
@@ -47,7 +51,7 @@ export function OwlAssistantBanner({ state, storage }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fingerprint, tone, storage])
 
-  if (state === null || (state.dismissible && dismissed)) return null
+  if (state === null || (state.dismissible && dismissed && !hasAction)) return null
 
   const shown: Shown =
     state.tone === 'sarcastic' && coolingDown
@@ -62,17 +66,20 @@ export function OwlAssistantBanner({ state, storage }: Props) {
 
   return (
     <section
-      className={`owl-banner owl-banner--${shown.tone}`}
+      className={`owl-banner owl-banner--${shown.tone}${variant === 'hero' ? ' owl-banner--hero' : ''}${variant === 'dashboard' ? ' owl-banner--dashboard' : ''}`}
       aria-label="Сова-помощник"
       data-testid="owl-banner"
       data-tone={shown.tone}
     >
-      <img className="owl-banner__image" src={resolveOwlAsset(state.asset_key)} alt="Сова-помощник" />
+      {variant !== 'dashboard' ? (
+        <img className="owl-banner__image" src={resolveOwlAsset(state.asset_key)} alt="Сова-помощник" />
+      ) : null}
       <div className="owl-banner__body">
         <p className="owl-banner__lead">{shown.line1}</p>
         <p className="owl-banner__fact">{state.caption_line2}</p>
+        {action}
       </div>
-      {state.dismissible ? (
+      {state.dismissible && !hasAction ? (
         <button type="button" className="owl-banner__dismiss button button--small" onClick={handleDismiss}>
           Скрыть
         </button>

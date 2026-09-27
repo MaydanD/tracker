@@ -1,0 +1,60 @@
+.analytics-page {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  width: 100%;
+  max-width: var(--content-width);
+}
+
+.analytics-owl-slot {
+  min-height: 146px;
+}
+
+.analytics-owl-placeholder {
+  min-height: 146px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.analytics-records {
+  border-top: 1px solid var(--color-border);
+  padding-top: 18px;
+}
+
+.analytics-trend-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.analytics-trend-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.analytics-trend-group__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.calendar-page--embedded {
+  border-top: 1px solid var(--color-border);
+  padding-top: 18px;
+}
+
+.calendar-page--embedded .calendar-section {
+  padding: 16px;
+  border-radius: 12px;
+}
+
+.calendar-page--embedded .calendar-cell {
+  border-radius: 9px;
+  min-height: 52px;
+  padding: 6px 8px;
+}
+
+.calendar-page--embedded .heatmap-cell {
+  border-radius: 4px;
+}

@@ -49,7 +49,7 @@ def histories_from_loaded(
         histories.append(HabitHistory(
             habit_id=habit.id,
             versions=tuple(
-                Version(v.effective_from, v.name, v.weight, v.schedule)
+                Version(v.effective_from, v.name, v.weight, v.schedule, v.area_id)
                 for v in habit.versions
             ),
             entries=entries.get(habit.id, {}), archived_on=archived_on,
