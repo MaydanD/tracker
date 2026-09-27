@@ -161,8 +161,8 @@ tracker/
 
 - **Windows 11** (developed and verified there; the code is not Windows-only)
 - **Python 3.11+** — verified with 3.13. Check with `python --version`.
-- **Node.js 20+** with npm — verified with Node 24 / npm 12. Check with
-  `node --version`.
+- **Node.js 22.22.2+ (22.x), 24.15.0+ (24.x), or 26+** with npm, as declared in
+  `frontend/package.json` (`engines.node`). Check with `node --version`.
 - **PowerShell** (bundled with Windows) for the helper scripts.
 
 No Docker, PostgreSQL, WSL, Make, bash or cloud services are required.
