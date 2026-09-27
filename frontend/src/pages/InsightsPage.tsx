@@ -207,10 +207,6 @@ export function InsightsPage({
           <header className="page__header">
             <h1 className="page__title">Аналитика</h1>
           </header>
-          <p className="page__summary">
-            Связи в ваших данных: что видно в истории, насколько это подтверждено и какие
-            ограничения у каждого наблюдения.
-          </p>
           <OwlAssistantBanner state={analytics?.owl ?? null} />
         </>
       ) : null}

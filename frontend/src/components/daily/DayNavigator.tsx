@@ -9,10 +9,11 @@ export interface DayNavigatorProps {
 }
 
 /**
- * Pick the day being recorded: previous, next, today, or an explicit date.
+ * Compact date navigator.
  *
- * The date is a plain calendar date and never crosses a timezone: the value sent
- * to the API is the same string the user sees.
+ * Fits in a single horizontal row on desktop: date label on the left, all
+ * controls on the right.  The date input is intentionally kept small and
+ * inline — it's an escape hatch, not the primary way to pick a date.
  */
 export function DayNavigator({
   entryDate,
@@ -23,28 +24,34 @@ export function DayNavigator({
   const relative = relativeDayLabel(entryDate, today)
 
   return (
-    <section className="day-nav" aria-label="Выбор дня">
+    <nav className="day-nav" aria-label="Выбор дня">
+      {/* ── Left: current date label ───────────────────────── */}
       <div className="day-nav__label">
-        <h2 className="day-nav__date">{formatDayLabel(entryDate)}</h2>
-        {relative !== null ? <span className="badge">{relative}</span> : null}
+        <span className="day-nav__date">{formatDayLabel(entryDate)}</span>
+        {relative !== null ? (
+          <span className="badge day-nav__badge">{relative}</span>
+        ) : null}
       </div>
 
+      {/* ── Right: navigation controls ─────────────────────── */}
       <div className="day-nav__controls">
         <button
           type="button"
-          className="button button--small"
+          className="button button--small button--icon-text"
+          aria-label="Предыдущий день"
           onClick={() => onChange(addDays(entryDate, -1))}
           disabled={disabled}
         >
-          ← Предыдущий день
+          ←
         </button>
         <button
           type="button"
-          className="button button--small"
+          className="button button--small button--icon-text"
+          aria-label="Следующий день"
           onClick={() => onChange(addDays(entryDate, 1))}
           disabled={disabled}
         >
-          Следующий день →
+          →
         </button>
         <button
           type="button"
@@ -55,19 +62,17 @@ export function DayNavigator({
           Сегодня
         </button>
 
-        <label className="field field--inline">
-          <span className="field__label">Дата</span>
-          <input
-            type="date"
-            className="field__input field__input--date"
-            value={entryDate}
-            onChange={(event) => {
-              if (event.target.value !== '') onChange(event.target.value)
-            }}
-            disabled={disabled}
-          />
-        </label>
+        <input
+          type="date"
+          className="field__input field__input--date day-nav__date-input"
+          aria-label="Выбрать дату"
+          value={entryDate}
+          onChange={(e) => {
+            if (e.target.value !== '') onChange(e.target.value)
+          }}
+          disabled={disabled}
+        />
       </div>
-    </section>
+    </nav>
   )
 }

@@ -3,10 +3,9 @@ import { useState } from 'react'
 import { fetchDay } from '../api/daily'
 import { fetchProgress } from '../api/progress'
 import { ProgressSummary } from '../components/daily/ProgressSummary'
-import { DailyStatePanel } from '../components/daily/DailyStatePanel'
 import { EmptyState, ErrorBanner, InfoBanner, LoadingText } from '../components/Feedback'
 import { DayNavigator } from '../components/daily/DayNavigator'
-import { HabitDayList } from '../components/daily/HabitDayList'
+import { CheckInGrid } from '../components/daily/CheckInGrid'
 import { refreshOwl } from '../components/owl/owlStore'
 import { formatDayLabel, localTodayIso } from '../components/daily/dates'
 import { useAsyncData } from '../hooks/useAsyncData'
@@ -15,9 +14,9 @@ import { useAsyncData } from '../hooks/useAsyncData'
  * Итоги дня — record what happened for each habit on a chosen calendar date.
  *
  * Two states are deliberately kept apart in the wording and in the data:
- * «Нет отметки» means nothing has been recorded, «Пропущено» means the user said
- * the habit was not done. Clearing a day returns it to «Нет отметки»; Tracker
- * never turns silence into a miss.
+ * «Нет отметки» means nothing has been recorded, «Пропущено» means the user
+ * said the habit was not done. Clearing a day returns it to «Нет отметки»;
+ * Tracker never turns silence into a miss.
  *
  * Past days stay editable. For a future day only a planned skip is offered —
  * and the backend refuses anything else regardless of what is clicked.
@@ -33,38 +32,35 @@ export function CheckInPage() {
     (signal) => fetchDay(entryDate, signal),
     [entryDate, revision],
   )
-  const derived = useAsyncData((signal) => fetchProgress(entryDate, signal), [entryDate, revision])
-  const progress = !derived.loading && !derived.error && derived.data?.day.entry_date === entryDate
-    ? derived.data : null
+  const derived = useAsyncData(
+    (signal) => fetchProgress(entryDate, signal),
+    [entryDate, revision],
+  )
+  const progress =
+    !derived.loading && !derived.error && derived.data?.day.entry_date === entryDate
+      ? derived.data
+      : null
 
   function refresh() {
     setRevision((value) => value + 1)
-    // Marking a day can change the Owl (all done, miss pile-up, records), so the
-    // header mascot is refreshed alongside the day's own data.
+    // Marking a day can change the Owl (all done, miss pile-up, records), so
+    // the header mascot is refreshed alongside the day's own data.
     refreshOwl()
   }
 
-  // Only the response for the date in the navigator is shown. A reload (after a
-  // save, or while another day loads) therefore never renders one day's records
-  // — or one day's enabled actions — under a different day's label.
+  // Only the response for the date in the navigator is shown. A reload (after
+  // a save, or while another day loads) therefore never renders one day's
+  // records — or one day's enabled actions — under a different day's label.
   const day = data !== null && data.entry_date === entryDate ? data : null
 
   const isFuture = day?.is_future ?? false
-  // `today` is the server's date and does not depend on the requested day, so it
-  // may come from any loaded response.
+  // `today` is the server's date and does not depend on the requested day, so
+  // it may come from any loaded response.
   const today = data?.today ?? localTodayIso()
 
   return (
-    <section className="page">
-      <header className="page__header">
-        <h1 className="page__title">Итоги дня</h1>
-      </header>
-      <p className="page__summary">
-        Отметьте состояние каждой привычки за выбранный день. Запись можно
-        изменить или полностью убрать — тогда день снова станет «Нет отметки».
-        Отсутствие отметки не превращается в пропуск само по себе.
-      </p>
-
+    <section className="page checkin-page">
+      {/* ── Compact date navigator ─────────────────────────── */}
       <DayNavigator
         entryDate={entryDate}
         today={today}
@@ -81,29 +77,37 @@ export function CheckInPage() {
 
       <ErrorBanner message={error} />
       <ErrorBanner message={derived.error} />
-      {derived.error ? <button className="button" onClick={derived.reload}>Повторить расчёт</button> : null}
+      {derived.error ? (
+        <button className="button" onClick={derived.reload}>
+          Повторить расчёт
+        </button>
+      ) : null}
 
-      {/* Two panels side by side on a desktop window, stacked when narrow. */}
-      <div className="checkin-panels">
-        {progress ? <ProgressSummary progress={progress} /> : null}
-        <DailyStatePanel date={entryDate} />
-      </div>
+      {/* ── Progress summary (compact, above the grid) ──────── */}
+      {progress ? (
+        <ProgressSummary progress={progress} />
+      ) : null}
 
+      {/* ── Unified check-in grid ───────────────────────────── */}
       {day === null ? (
         <LoadingText>Загрузка отметок за {formatDayLabel(entryDate)}…</LoadingText>
-      ) : day.items.length === 0 ? (
-        <EmptyState>
-          На эту дату ещё нет привычек: ни одна привычка не была настроена так
-          рано. Создайте привычку или выберите другую дату.
-        </EmptyState>
       ) : (
-        <HabitDayList
-          items={day.items}
-          entryDate={day.entry_date}
-          isFuture={day.is_future}
-          onChanged={refresh}
-          progress={progress}
-        />
+        <>
+          {day.items.length === 0 ? (
+            <EmptyState>
+              На эту дату ещё нет привычек: ни одна привычка не была настроена так
+              рано. Создайте привычку или выберите другую дату.
+            </EmptyState>
+          ) : null}
+          <CheckInGrid
+            key={entryDate}
+            items={day.items}
+            entryDate={day.entry_date}
+            isFuture={day.is_future}
+            onChanged={refresh}
+            progress={progress}
+          />
+        </>
       )}
     </section>
   )

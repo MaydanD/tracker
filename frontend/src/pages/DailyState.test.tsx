@@ -6,7 +6,6 @@ import { DailyStatePanel } from '../components/daily/DailyStatePanel'
 import { addDays, localTodayIso } from '../components/daily/dates'
 import { createFakeApi } from '../test/fakeApi'
 import { emptyResponse, jsonResponse, stubApi, stubFetch } from '../test/fetchStub'
-import { CheckInPage } from './CheckInPage'
 
 const TODAY = localTodayIso()
 function record(date: string, values: Partial<DailyStateInput> = {}): DailyStateRecord {
@@ -56,7 +55,7 @@ describe('Состояние дня', () => {
 
   it('saves every field, edits, reloads and clears without refreshing habits or progress', async () => {
     const api = setup()
-    const first = render(<CheckInPage />)
+    const first = render(<DailyStatePanel date={TODAY} />)
     await screen.findByText(/Состояние пока не заполнено/)
     choose('Настроение', '4'); choose('Энергия', '2'); choose('Самочувствие', '5')
     choose('Сон', 'Недосып'); input('Длительность сна: часы', '7'); input('Длительность сна: минуты', '30')
@@ -69,7 +68,7 @@ describe('Состояние дня', () => {
     expect(api.writes[0]).toEqual({ mood: 4, energy: 2, wellbeing: 5, sleep_status: 'underslept', sleep_minutes: 450, alcohol: true, alcohol_detail: '2 пива', gaming: true, gaming_minutes: 80, computer_overuse: false, computer_minutes: 180, note: 'День дома' })
     expect(api.fetch.mock.calls.filter(([url]) => !String(url).endsWith('/state'))).toHaveLength(habitReads)
     first.unmount()
-    render(<CheckInPage />)
+    render(<DailyStatePanel date={TODAY} />)
     await screen.findByDisplayValue('День дома')
     selected('Алкоголь', 'Да'); selected('Слишком много времени за компьютером', 'Нет')
     expect(screen.getByLabelText('Длительность сна: минуты')).toHaveValue(30)

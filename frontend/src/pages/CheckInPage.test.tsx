@@ -106,7 +106,7 @@ function stalledResponse(body: unknown): { response: Response; release: () => vo
 
 /** The row for one habit, so assertions stay scoped to it. */
 function row(name: string): HTMLElement {
-  const item = screen.getByText(name).closest('li')
+  const item = screen.getByText(name).closest<HTMLElement>('.ccard')
   if (item === null) throw new Error(`No row for ${name}`)
   return item
 }
@@ -123,9 +123,7 @@ function chooseStatus(name: string, label: string): void {
   fireEvent.click(within(row(name)).getByRole('button', { name: label }))
 }
 
-function save(name: string): void {
-  fireEvent.click(within(row(name)).getByRole('button', { name: 'Сохранить' }))
-}
+
 
 async function waitForHabits(...names: string[]): Promise<void> {
   for (const name of names) {
@@ -134,18 +132,19 @@ async function waitForHabits(...names: string[]): Promise<void> {
 }
 
 describe('CheckInPage', () => {
-  it('is written in Russian and explains what the states mean', async () => {
+  it('uses compact Russian controls without introductory copy', async () => {
     stubFakeApi(createFakeApi({ areas: [health], habits: [binaryHabit()] }))
 
     render(<CheckInPage />)
 
-    expect(await screen.findByRole('heading', { name: 'Итоги дня' })).toBeInTheDocument()
-    expect(screen.getByText(/Отсутствие отметки не превращается в пропуск/)).toBeInTheDocument()
+    await waitForHabits('Reading')
+    expect(screen.queryByRole('heading', { name: 'Итоги дня' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Сохранить' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Выполнено' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Пропущено' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Осознанный пропуск' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '← Предыдущий день' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Дата')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Предыдущий день' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Выбрать дату')).toBeInTheDocument()
   })
 
   it('shows «Нет отметки» for a day with nothing recorded', async () => {
@@ -168,7 +167,6 @@ describe('CheckInPage', () => {
     await waitForHabits('Reading')
 
     chooseStatus('Reading', 'Выполнено')
-    save('Reading')
 
     await waitFor(() => expect(api.entries).toHaveLength(1))
     expect(api.entries[0]?.status).toBe('done')
@@ -185,7 +183,6 @@ describe('CheckInPage', () => {
     await waitForHabits('Reading')
 
     chooseStatus('Reading', 'Пропущено')
-    save('Reading')
 
     await waitFor(() => expect(api.entries[0]?.status).toBe('missed'))
     await waitFor(() => expect(stateOf('Reading')).toHaveTextContent('Пропущено'))
@@ -199,11 +196,9 @@ describe('CheckInPage', () => {
     render(<CheckInPage />)
     await waitForHabits('Reading')
     chooseStatus('Reading', 'Выполнено')
-    save('Reading')
     await waitFor(() => expect(stateOf('Reading')).toHaveTextContent('Выполнено'))
 
     chooseStatus('Reading', 'Пропущено')
-    save('Reading')
 
     await waitFor(() => expect(stateOf('Reading')).toHaveTextContent('Пропущено'))
     expect(api.entries).toHaveLength(1)
@@ -229,14 +224,13 @@ describe('CheckInPage', () => {
 
     chooseStatus('Walking', 'Выполнено')
     const quantity = within(row('Walking')).getByLabelText('Количество')
-    expect(screen.getByText(/Единица измерения на эту дату: km/)).toBeInTheDocument()
+    expect(quantity).toHaveAttribute('placeholder', 'km')
 
     fireEvent.change(quantity, { target: { value: '6.4' } })
-    save('Walking')
 
-    await waitFor(() => expect(api.entries).toHaveLength(1))
-    expect(api.entries[0]?.quantity_value).toBe(6.4)
-    expect(api.entries[0]?.quantity_unit).toBe('km')
+    await waitFor(() => expect(api.entries).toHaveLength(2))
+    await waitFor(() => expect(api.entries.find(e => e.habit_id === 2)?.quantity_value).toBe(6.4))
+    expect(api.entries.find(e => e.habit_id === 2)?.quantity_unit).toBe('km')
     await waitFor(() => expect(stateOf('Walking')).toHaveTextContent('6.4 km'))
   })
 
@@ -253,7 +247,6 @@ describe('CheckInPage', () => {
     fireEvent.change(within(row('Reading')).getByLabelText('Количество'), {
       target: { value: '6.4' },
     })
-    save('Reading')
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Для этой привычки допустимы только целые значения.',
@@ -271,8 +264,7 @@ describe('CheckInPage', () => {
     chooseStatus('Reading', 'Осознанный пропуск')
     expect(within(row('Reading')).getByLabelText('Причина пропуска')).toBeInTheDocument()
 
-    save('Reading')
-    expect(await screen.findByRole('alert')).toHaveTextContent('Укажите причину пропуска.')
+    expect(within(row('Reading')).queryByRole('button', { name: /ОК/ })).toBeNull()
     expect(api.entries).toHaveLength(0)
 
     fireEvent.change(within(row('Reading')).getByLabelText('Причина пропуска'), {
@@ -281,14 +273,13 @@ describe('CheckInPage', () => {
     fireEvent.change(within(row('Reading')).getByLabelText('Заметка (необязательно)'), {
       target: { value: 'вернулся поздно' },
     })
-    save('Reading')
 
     await waitFor(() => expect(api.entries).toHaveLength(1))
     expect(api.entries[0]?.status).toBe('skipped')
     expect(api.entries[0]?.skip_reason).toBe('Отпуск')
     expect(api.entries[0]?.note).toBe('вернулся поздно')
-    await waitFor(() => expect(stateOf('Reading')).toHaveTextContent('Причина: Отпуск'))
-    expect(stateOf('Reading')).toHaveTextContent('вернулся поздно')
+    expect(screen.getByLabelText('Причина пропуска')).toHaveValue('Отпуск')
+    expect(screen.getByLabelText('Заметка (необязательно)')).toHaveValue('вернулся поздно')
   })
 
   it('hides the skip reason field for a non-skipped status', async () => {
@@ -315,19 +306,17 @@ describe('CheckInPage', () => {
     fireEvent.change(within(row('Reading')).getByLabelText('Заметка (необязательно)'), {
       target: { value: 'тяжело пошло' },
     })
-    save('Reading')
 
     await waitFor(() => expect(api.entries[0]?.note).toBe('тяжело пошло'))
-    await waitFor(() => expect(stateOf('Reading')).toHaveTextContent('тяжело пошло'))
+    expect(screen.getByLabelText('Заметка (необязательно)')).toHaveValue('тяжело пошло')
 
     // Saving without the note clears it.
     fireEvent.change(within(row('Reading')).getByLabelText('Заметка (необязательно)'), {
       target: { value: '' },
     })
-    save('Reading')
 
     await waitFor(() => expect(api.entries[0]?.note).toBeNull())
-    await waitFor(() => expect(stateOf('Reading')).not.toHaveTextContent('тяжело пошло'))
+    expect(screen.getByLabelText('Заметка (необязательно)')).toHaveValue('')
   })
 
   it('clears a record back to «Нет отметки» instead of a miss', async () => {
@@ -337,10 +326,9 @@ describe('CheckInPage', () => {
     render(<CheckInPage />)
     await waitForHabits('Reading')
     chooseStatus('Reading', 'Выполнено')
-    save('Reading')
     await waitFor(() => expect(stateOf('Reading')).toHaveTextContent('Выполнено'))
 
-    fireEvent.click(within(row('Reading')).getByRole('button', { name: 'Очистить' }))
+    fireEvent.click(within(row('Reading')).getByRole('button', { name: 'Убрать отметку' }))
 
     await waitFor(() => expect(api.entries).toHaveLength(0))
     await waitFor(() => expect(stateOf('Reading')).toHaveTextContent('Нет отметки'))
@@ -353,24 +341,24 @@ describe('CheckInPage', () => {
 
     render(<CheckInPage />)
     await waitForHabits('Reading')
-    expect(screen.getByLabelText('Дата')).toHaveValue(TODAY)
+    expect(screen.getByLabelText('Выбрать дату')).toHaveValue(TODAY)
 
-    fireEvent.click(screen.getByRole('button', { name: '← Предыдущий день' }))
-    await waitFor(() => expect(screen.getByLabelText('Дата')).toHaveValue(YESTERDAY))
+    fireEvent.click(screen.getByRole('button', { name: 'Предыдущий день' }))
+    await waitFor(() => expect(screen.getByLabelText('Выбрать дату')).toHaveValue(YESTERDAY))
     expect(screen.getByText('Вчера')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Следующий день →' }))
-    await waitFor(() => expect(screen.getByLabelText('Дата')).toHaveValue(TODAY))
+    fireEvent.click(screen.getByRole('button', { name: 'Следующий день' }))
+    await waitFor(() => expect(screen.getByLabelText('Выбрать дату')).toHaveValue(TODAY))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Следующий день →' }))
-    await waitFor(() => expect(screen.getByLabelText('Дата')).toHaveValue(TOMORROW))
+    fireEvent.click(screen.getByRole('button', { name: 'Следующий день' }))
+    await waitFor(() => expect(screen.getByLabelText('Выбрать дату')).toHaveValue(TOMORROW))
     expect(screen.getByText('Завтра')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: YESTERDAY } })
-    await waitFor(() => expect(screen.getByLabelText('Дата')).toHaveValue(YESTERDAY))
+    fireEvent.change(screen.getByLabelText('Выбрать дату'), { target: { value: YESTERDAY } })
+    await waitFor(() => expect(screen.getByLabelText('Выбрать дату')).toHaveValue(YESTERDAY))
 
     fireEvent.click(screen.getByRole('button', { name: 'Сегодня' }))
-    await waitFor(() => expect(screen.getByLabelText('Дата')).toHaveValue(TODAY))
+    await waitFor(() => expect(screen.getByLabelText('Выбрать дату')).toHaveValue(TODAY))
   })
 
   it('records a past day', async () => {
@@ -380,11 +368,11 @@ describe('CheckInPage', () => {
     render(<CheckInPage />)
     await waitForHabits('Reading')
 
-    fireEvent.click(screen.getByRole('button', { name: '← Предыдущий день' }))
-    await waitFor(() => expect(screen.getByLabelText('Дата')).toHaveValue(YESTERDAY))
+    fireEvent.click(screen.getByRole('button', { name: 'Предыдущий день' }))
+    await waitFor(() => expect(screen.getByLabelText('Выбрать дату')).toHaveValue(YESTERDAY))
 
+    await waitForHabits('Reading')
     chooseStatus('Reading', 'Пропущено')
-    save('Reading')
 
     await waitFor(() => expect(api.entries).toHaveLength(1))
     expect(api.entries[0]?.entry_date).toBe(YESTERDAY)
@@ -397,10 +385,10 @@ describe('CheckInPage', () => {
 
     render(<CheckInPage />)
     await waitForHabits('Reading')
-    fireEvent.click(screen.getByRole('button', { name: 'Следующий день →' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Следующий день' }))
 
     expect(await screen.findByText(/Будущий день/)).toBeInTheDocument()
-    await waitFor(() => expect(screen.getByLabelText('Дата')).toHaveValue(TOMORROW))
+    await waitFor(() => expect(screen.getByLabelText('Выбрать дату')).toHaveValue(TOMORROW))
 
     expect(screen.getByRole('button', { name: 'Выполнено' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Пропущено' })).toBeDisabled()
@@ -411,7 +399,6 @@ describe('CheckInPage', () => {
     fireEvent.change(within(row('Reading')).getByLabelText('Причина пропуска'), {
       target: { value: 'Отпуск' },
     })
-    save('Reading')
 
     await waitFor(() => expect(api.entries).toHaveLength(1))
     expect(api.entries[0]?.entry_date).toBe(TOMORROW)
@@ -429,19 +416,19 @@ describe('CheckInPage', () => {
 
     render(<CheckInPage />)
     await waitForHabits('Reading')
-    fireEvent.click(screen.getByRole('button', { name: 'Следующий день →' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Следующий день' }))
 
-    await waitFor(() => expect(stateOf('Reading')).toHaveTextContent('Причина: Отпуск'))
+    await waitFor(() => expect(screen.getByLabelText('Причина пропуска')).toHaveValue('Отпуск'))
+    fireEvent.click(screen.getByText('Уже отмечено · 1'))
 
     fireEvent.change(within(row('Reading')).getByLabelText('Причина пропуска'), {
       target: { value: 'Поездка' },
     })
-    save('Reading')
 
     await waitFor(() => expect(api.entries[0]?.skip_reason).toBe('Поездка'))
-    await waitFor(() => expect(stateOf('Reading')).toHaveTextContent('Причина: Поездка'))
+    expect(screen.getByLabelText('Причина пропуска')).toHaveValue('Поездка')
 
-    fireEvent.click(within(row('Reading')).getByRole('button', { name: 'Очистить' }))
+    fireEvent.click(within(row('Reading')).getByRole('button', { name: 'Убрать отметку' }))
 
     await waitFor(() => expect(api.entries).toHaveLength(0))
     await waitFor(() => expect(stateOf('Reading')).toHaveTextContent('Нет отметки'))
@@ -467,7 +454,8 @@ describe('CheckInPage', () => {
 
     render(<CheckInPage />)
 
-    expect(await screen.findByText('Пн, Ср, Пт (3 раза в неделю)')).toBeInTheDocument()
+    await waitForHabits('Reading')
+    expect(screen.getByText('Reading')).toHaveAttribute('title', 'Пн, Ср, Пт (3 раза в неделю)')
   })
 
   it('keeps an archived habit’s recorded day editable', async () => {
@@ -488,11 +476,11 @@ describe('CheckInPage', () => {
     render(<CheckInPage />)
     await waitForHabits('Reading')
 
-    expect(await screen.findByText('до архива')).toBeInTheDocument()
-    expect(screen.getByText('В архиве')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Уже отмечено · 1'))
+    expect(screen.getByLabelText('Заметка (необязательно)')).toHaveValue('до архива')
+    expect(screen.getByText('архив')).toBeInTheDocument()
 
     chooseStatus('Reading', 'Пропущено')
-    save('Reading')
 
     await waitFor(() => expect(api.entries[0]?.status).toBe('missed'))
   })
@@ -547,7 +535,6 @@ describe('CheckInPage', () => {
     fireEvent.change(within(row('Reading')).getByLabelText('Количество'), {
       target: { value: '35' },
     })
-    save('Reading')
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Для этой привычки допустимы только целые значения.',
@@ -557,6 +544,8 @@ describe('CheckInPage', () => {
   it('never shows one day’s controls under another day’s date', async () => {
     const tomorrow = stalledResponse(dayPayload(TOMORROW, true))
     stubApi({
+      [`GET /api/days/${TODAY}/state`]: () => jsonResponse({ state_date: TODAY, today: TODAY, state: null }),
+      [`GET /api/days/${TOMORROW}/state`]: () => jsonResponse({ state_date: TOMORROW, today: TODAY, state: null }),
       [`GET /api/progress/days/${TODAY}`]: () => jsonResponse(progressFixture(TODAY)),
       [`GET /api/progress/days/${TOMORROW}`]: () => jsonResponse(progressFixture(TOMORROW)),
       [`GET /api/days/${TODAY}`]: () => jsonResponse(dayPayload(TODAY, false)),
@@ -566,11 +555,11 @@ describe('CheckInPage', () => {
     render(<CheckInPage />)
     await waitForHabits('Reading')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Следующий день →' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Следующий день' }))
 
     // The navigator has moved on but tomorrow has not answered: today's rows and
     // today's enabled actions must not stand in for it.
-    await waitFor(() => expect(screen.getByLabelText('Дата')).toHaveValue(TOMORROW))
+    await waitFor(() => expect(screen.getByLabelText('Выбрать дату')).toHaveValue(TOMORROW))
     expect(screen.queryByText('Reading')).toBeNull()
     expect(screen.getByText(/Загрузка отметок/)).toBeInTheDocument()
 
@@ -586,7 +575,7 @@ describe('CheckInPage', () => {
     render(<CheckInPage />)
     await waitForHabits('Reading')
 
-    fireEvent.change(screen.getByLabelText('Дата'), {
+    fireEvent.change(screen.getByLabelText('Выбрать дату'), {
       target: { value: addDays(TODAY, -60) },
     })
 

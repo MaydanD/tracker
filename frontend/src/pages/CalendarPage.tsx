@@ -170,9 +170,6 @@ export function CalendarPage({ embedded = false }: CalendarPageProps) {
           <header className="page__header">
             <h1 className="page__title">Календарь и тепловая карта</h1>
           </header>
-          <p className="page__summary">
-            Просматривайте историю выполнений по месяцам и за весь год. Выберите любой день для просмотра деталей.
-          </p>
         </>
       ) : null}
 

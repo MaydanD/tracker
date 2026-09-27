@@ -1,0 +1,590 @@
+/* ==========================================================================
+   Check-in page — unified card grid, OK button timer, day navigator
+   ========================================================================== */
+
+/* -- Page layout ------------------------------------------------------------ */
+
+.checkin-page {
+  gap: 8px;          /* tighter than the default 12px page gap */
+}
+
+/* -- Day navigator ---------------------------------------------------------- */
+
+.day-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 7px 12px;
+}
+
+.day-nav__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.day-nav__date {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.day-nav__badge {
+  font-size: 11px;
+}
+
+.day-nav__controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.day-nav__date-input {
+  /* Override the generic field__input width so it's compact inline */
+  width: auto;
+  max-width: 140px;
+  padding: 3px 7px;
+  min-height: 28px;
+  font-size: 13px;
+}
+
+.button--icon-text {
+  min-width: 32px;
+  padding-inline: 10px;
+  font-size: 15px;
+}
+
+/* -- Check-in grid ---------------------------------------------------------- */
+
+.checkin-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Active cards — multi-column, fills the viewport width */
+.checkin-grid__cells {
+  display: grid;
+  /* 4 columns on 1440, 3 on ~1100, 2 on ~740, 1 on narrow */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 8px;
+  align-items: start;
+}
+
+/* Done section cells are slightly smaller — they're secondary */
+.checkin-grid__cells--done {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+}
+
+/* "All done" banner */
+.checkin-grid__complete {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--status-healthy);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-weight: 600;
+  color: var(--status-healthy);
+}
+
+.checkin-grid__complete-img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* "Уже отмечено" spoiler */
+.checkin-grid__done {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.checkin-grid__done-summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  list-style: none;
+  user-select: none;
+}
+
+.checkin-grid__done-summary::-webkit-details-marker {
+  display: none;
+}
+
+.checkin-grid__done-summary::before {
+  content: '▶ ';
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.checkin-grid__done[open] .checkin-grid__done-summary::before {
+  content: '▼ ';
+}
+
+.checkin-grid__done[open] .checkin-grid__cells {
+  padding: 0 8px 8px;
+}
+
+/* -- Check-in card (ccard) -------------------------------------------------- */
+
+.ccard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  /* Smooth border/shadow transitions for state changes */
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  /* Prevent layout shifts when extra fields appear */
+  min-width: 0;
+}
+
+/* Just-saved, inside the 5-second window */
+.ccard--counting {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(47, 111, 208, 0.12);
+}
+
+/* Filled (not yet counting, or in completed section) */
+.ccard--filled {
+  border-color: #b5dfc4;
+}
+
+/* While a request is in flight */
+.ccard--busy {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Archived habit — slight mute */
+.ccard--archived {
+  background: #fafbfc;
+}
+
+/* ── Card header ─────────────────────────────────────────────────────────── */
+
+.ccard__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ccard__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Status pill in the header */
+.ccard__pill {
+  flex-shrink: 0;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.ccard__pill--none {
+  background: #f1f3f5;
+  border: 1px dashed #c8ced4;
+  color: var(--color-text-muted);
+}
+
+.ccard__pill--done {
+  background: #e5f4ea;
+  border: 1px solid #b5dfc4;
+  color: #1f6b3a;
+}
+
+.ccard__pill--missed {
+  background: #fdecec;
+  border: 1px solid #f3c2c2;
+  color: #8f2323;
+}
+
+.ccard__pill--skipped {
+  background: #eef4fc;
+  border: 1px solid #c9dcf5;
+  color: #24456f;
+}
+
+/* Clear button (✕) in the header */
+.ccard__clear-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 0.1s ease, background 0.1s ease;
+}
+
+.ccard__clear-btn:hover:not(:disabled) {
+  background: #fdecec;
+  color: #8f2323;
+}
+
+.ccard__clear-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Status buttons row ──────────────────────────────────────────────────── */
+
+.ccard__actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ccard__status-btn {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  min-height: 28px;
+  transition: border-color 0.1s ease, background 0.1s ease, color 0.1s ease;
+  white-space: nowrap;
+}
+
+.ccard__status-btn:hover:not(:disabled):not(.ccard__status-btn--active) {
+  background: #f0f4ff;
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.ccard__status-btn--active {
+  background: #e5f4ea;
+  border-color: #2f9e5f;
+  color: #1f6b3a;
+  font-weight: 600;
+}
+
+.ccard__status-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Scale buttons (daily state 1–5) ─────────────────────────────────────── */
+
+.ccard__scale {
+  display: flex;
+  gap: 4px;
+}
+
+.ccard__scale-btn {
+  flex: 1;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 0;
+  text-align: center;
+  transition: border-color 0.1s ease, background 0.1s ease, color 0.1s ease;
+}
+
+.ccard__scale-btn:hover:not(:disabled):not(.ccard__scale-btn--active) {
+  background: #f0f4ff;
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.ccard__scale-btn--active {
+  background: #e5f4ea;
+  border-color: #2f9e5f;
+  color: #1f6b3a;
+}
+
+.ccard__scale-hint {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+/* ── Segmented buttons (sleep status, boolean) ───────────────────────────── */
+
+.ccard__segments {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.ccard__seg-btn {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 10px;
+  min-height: 28px;
+  transition: border-color 0.1s ease, background 0.1s ease, color 0.1s ease;
+  white-space: nowrap;
+}
+
+.ccard__seg-btn:hover:not(:disabled):not(.ccard__seg-btn--active) {
+  background: #f0f4ff;
+  border-color: var(--color-accent);
+}
+
+.ccard__seg-btn--active {
+  background: #e5f4ea;
+  border-color: #2f9e5f;
+  color: #1f6b3a;
+  font-weight: 600;
+}
+
+/* ── Duration inputs ─────────────────────────────────────────────────────── */
+
+.ccard__duration {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.ccard__duration-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.ccard__duration-hint {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+/* ── Fieldset reset (daily state cards) ─────────────────────────────────── */
+
+.ccard__fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: contents;
+}
+
+.ccard__fieldset:disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* ── Text inputs ─────────────────────────────────────────────────────────── */
+
+.ccard__input {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 8px;
+  min-height: 28px;
+  transition: border-color 0.1s ease;
+}
+
+.ccard__input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(47, 111, 208, 0.12);
+}
+
+.ccard__input--narrow {
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.ccard__input--tiny {
+  width: 56px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.ccard__textarea {
+  resize: vertical;
+  min-height: 52px;
+}
+
+/* ── Error ───────────────────────────────────────────────────────────────── */
+
+.ccard__error {
+  margin: 0;
+  font-size: 12px;
+  color: #8f2323;
+  background: #fdecec;
+  border: 1px solid #f3c2c2;
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+
+/* ==========================================================================
+   OK button — the 5-second progress fill
+   ========================================================================== */
+
+/*
+ * A CSS custom property `--ok-progress` (0%–100%) drives a linear-gradient
+ * that fills from left to right as the countdown proceeds.
+ * No JS animation loop is needed for the visual — the rAF loop in
+ * useCardTimer updates the style every frame.
+ */
+.ok-btn {
+  --ok-progress: 0%;
+
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid var(--color-accent);
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-accent);
+  padding: 4px 14px;
+  min-height: 28px;
+  width: 100%;
+
+  /* Base: transparent; fill grows over it */
+  background: linear-gradient(
+    to right,
+    rgba(47, 111, 208, 0.18) var(--ok-progress),
+    transparent var(--ok-progress)
+  );
+
+  transition: color 0.15s ease;
+}
+
+.ok-btn:hover {
+  background: linear-gradient(
+    to right,
+    rgba(47, 111, 208, 0.3) var(--ok-progress),
+    rgba(47, 111, 208, 0.08) var(--ok-progress)
+  );
+}
+
+/* When the fill reaches 100% just before the timer fires */
+.ok-btn[style*="--ok-progress: 100%"] {
+  color: #fff;
+  background: var(--color-accent);
+}
+
+/* ==========================================================================
+   Responsive overrides
+   ========================================================================== */
+
+@media (max-width: 600px) {
+  .checkin-grid__cells {
+    grid-template-columns: 1fr;
+  }
+
+  .day-nav {
+    padding: 6px 10px;
+  }
+
+  .day-nav__date-input {
+    max-width: 120px;
+  }
+}
+
+@media (max-width: 900px) {
+  .checkin-grid__cells {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  }
+}
+
+/* ==========================================================================
+   Card entry animation — cards fade+slide in when they first appear
+   ========================================================================== */
+
+@keyframes ccard-appear {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ccard {
+  animation: ccard-appear 0.15s ease-out both;
+}
+
+/* Cards in the done section don't animate on first load — only on transition */
+.checkin-grid__cells--done .ccard {
+  animation: none;
+}
+
+/* ==========================================================================
+   Progress summary — compact horizontal strip above the grid
+   ========================================================================== */
+
+/* Override the default .progress-summary grid to be a single compact row */
+.checkin-page .progress-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 8px 12px;
+  gap: 8px;
+}
+
+.checkin-page .progress-summary h2 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.checkin-page .progress-summary p {
+  font-size: 12px;
+  margin-block: 2px;
+}
+
+.checkin-page .progress-summary strong {
+  font-size: 16px;
+}
+
+.ccard__readiness { display: flex; gap: 6px; margin-top: auto; }
+.ccard__readiness .ok-btn { flex: 1; margin-top: 0; }
+.ccard__lock { border: 1px solid var(--color-border); border-radius: 6px; background: transparent; padding: 4px 8px; cursor: pointer; }
+.ccard__lock[aria-pressed="true"] { background: var(--color-surface); }
+
+@media (max-width: 600px) {
+  .checkin-page .progress-summary { grid-template-columns: 1fr; }
+}

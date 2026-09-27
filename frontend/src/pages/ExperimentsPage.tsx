@@ -51,10 +51,6 @@ export function ExperimentsPage() {
       <header className="page__header">
         <h1 className="page__title">Эксперименты</h1>
       </header>
-      <p className="page__summary">
-        Личные эксперименты: задайте период и гипотезу, а затем посмотрите, как показатели
-        Tracker соотносились с этим периодом — до, во время и после.
-      </p>
 
       <OwlAssistantBanner state={list.data?.owl ?? null} />
 

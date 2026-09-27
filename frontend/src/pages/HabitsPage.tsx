@@ -116,11 +116,6 @@ export function HabitsPage() {
       <header className="page__header">
         <h1 className="page__title">Привычки</h1>
       </header>
-      <p className="page__summary">
-        Объединяйте привычки по сферам и настраивайте их здесь. Изменения настроек
-        сохраняются по дням; правки в течение одного дня объединяются.
-        Выполнение отмечается в разделе «Итоги дня».
-      </p>
       <div className="toolbar">
         <button type="button" className="button button--primary" disabled={editor !== null}
           onClick={() => setEditor({ kind: 'area', area: null })}>

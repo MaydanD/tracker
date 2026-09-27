@@ -21,9 +21,6 @@ export function AnalyticsPage() {
         <header className="page__header">
           <h1 className="page__title">Аналитика</h1>
         </header>
-        <p className="page__summary">
-          Графики по привычкам и сферам, статистические наблюдения, рекорды и история активности.
-        </p>
         <div className="analytics-owl-slot">
           {owl !== null ? (
             <OwlAssistantBanner state={owl} />
