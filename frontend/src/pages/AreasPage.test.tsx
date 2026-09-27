@@ -4,18 +4,18 @@ import { describe, expect, it } from 'vitest'
 import { jsonResponse, stubApi } from '../test/fetchStub'
 import { createFakeApi, stubFakeApi } from '../test/fakeApi'
 import { areaFixture } from '../test/fixtures'
-import { AreasPage } from './AreasPage'
+import { HabitsPage } from './HabitsPage'
 
 function list(): HTMLElement {
-  return screen.getByRole('list')
+  return screen.getByRole('region', { name: 'Health' })
 }
 
 async function openCreateForm(): Promise<void> {
-  fireEvent.click(screen.getByRole('button', { name: 'Новая сфера' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Добавить сферу' }))
   await screen.findByLabelText('Название')
 }
 
-describe('AreasPage', () => {
+describe('Area management within HabitsPage', () => {
   it('lists areas with their colours', async () => {
     const api = createFakeApi({
       areas: [
@@ -25,17 +25,20 @@ describe('AreasPage', () => {
     })
     stubFakeApi(api)
 
-    render(<AreasPage />)
+    render(<HabitsPage />)
 
-    expect(await screen.findByText('Health')).toBeInTheDocument()
-    expect(screen.getByText('Work')).toBeInTheDocument()
-    expect(screen.getByText('#2f9e5f')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Health' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Work' })).toBeInTheDocument()
+    // The colour is shown as a swatch, not as a raw hex string.
+    const swatches = document.querySelectorAll('.swatch')
+    expect(swatches[0]).toHaveStyle({ backgroundColor: '#2f9e5f' })
+    expect(screen.queryByText('#2f9e5f')).not.toBeInTheDocument()
   })
 
   it('shows an empty state when there are no areas', async () => {
     stubFakeApi(createFakeApi())
 
-    render(<AreasPage />)
+    render(<HabitsPage />)
 
     expect(await screen.findByText(/Нет активных сфер/)).toBeInTheDocument()
   })
@@ -44,7 +47,7 @@ describe('AreasPage', () => {
     const api = createFakeApi()
     stubFakeApi(api)
 
-    render(<AreasPage />)
+    render(<HabitsPage />)
     await openCreateForm()
 
     fireEvent.change(screen.getByLabelText('Название'), {
@@ -52,7 +55,7 @@ describe('AreasPage', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Создать сферу' }))
 
-    expect(await screen.findByText('Development')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Development' })).toBeInTheDocument()
     expect(api.areas.map((area) => area.name)).toEqual(['Development'])
   })
 
@@ -60,7 +63,7 @@ describe('AreasPage', () => {
     const api = createFakeApi()
     stubFakeApi(api)
 
-    render(<AreasPage />)
+    render(<HabitsPage />)
     await openCreateForm()
 
     fireEvent.click(screen.getByRole('button', { name: 'Создать сферу' }))
@@ -73,7 +76,7 @@ describe('AreasPage', () => {
     const api = createFakeApi({ areas: [areaFixture({ name: 'Health' })] })
     stubFakeApi(api)
 
-    render(<AreasPage />)
+    render(<HabitsPage />)
     await openCreateForm()
 
     const nameInput = screen.getByLabelText('Название')
@@ -90,15 +93,15 @@ describe('AreasPage', () => {
     const api = createFakeApi({ areas: [areaFixture({ name: 'Health' })] })
     stubFakeApi(api)
 
-    render(<AreasPage />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Изменить' }))
+    render(<HabitsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Изменить сферу' }))
 
     const nameInput = screen.getByLabelText('Название')
     expect(nameInput).toHaveValue('Health')
     fireEvent.change(nameInput, { target: { value: 'Wellbeing' } })
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить изменения' }))
 
-    expect(await screen.findByText('Wellbeing')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Wellbeing' })).toBeInTheDocument()
     expect(api.areas[0]?.name).toBe('Wellbeing')
   })
 
@@ -108,20 +111,21 @@ describe('AreasPage', () => {
     })
     stubFakeApi(api)
 
-    render(<AreasPage />)
-    const healthRow = (await screen.findByText('Health')).closest('li')
+    render(<HabitsPage />)
+    const healthRow = (await screen.findByRole('heading', { name: 'Health' })).closest('section')
     expect(healthRow).not.toBeNull()
 
-    fireEvent.click(within(healthRow as HTMLElement).getByRole('button', { name: 'В архив' }))
+    fireEvent.click(within(healthRow as HTMLElement).getByRole('button', { name: 'Архивировать сферу' }))
 
-    await waitFor(() => expect(within(list()).queryByText('Health')).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Health' })).toBeNull())
     expect(api.areas[0]?.is_archived).toBe(true)
-    expect(screen.getByText('Work')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Work' })).toBeInTheDocument()
   })
 
   it('explains why an area with active habits cannot be archived', async () => {
     // The area looks archivable on screen, but the backend refuses.
     stubApi({
+      'GET /api/habits': () => jsonResponse([]),
       'GET /api/areas': () => jsonResponse([areaFixture({ name: 'Health' })]),
       'POST /api/areas/1/archive': () =>
         jsonResponse(
@@ -135,8 +139,8 @@ describe('AreasPage', () => {
         ),
     })
 
-    render(<AreasPage />)
-    fireEvent.click(await screen.findByRole('button', { name: 'В архив' }))
+    render(<HabitsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Архивировать сферу' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'В этой сфере есть активные привычки.',
@@ -151,25 +155,26 @@ describe('AreasPage', () => {
     })
     stubFakeApi(api)
 
-    render(<AreasPage />)
+    render(<HabitsPage />)
     expect(await screen.findByText(/Нет активных сфер/)).toBeInTheDocument()
 
     fireEvent.click(screen.getByLabelText('Показывать архивные'))
 
-    expect(await screen.findByText('Health')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Health' })).toBeInTheDocument()
     expect(within(list()).getByText(/в архиве/)).toBeInTheDocument()
 
-    fireEvent.click(within(list()).getByRole('button', { name: 'Восстановить' }))
+    fireEvent.click(within(list()).getByRole('button', { name: 'Восстановить сферу' }))
 
     await waitFor(() => expect(api.areas[0]?.is_archived).toBe(false))
     await waitFor(() =>
-      expect(within(list()).getByRole('button', { name: 'В архив' })).toBeInTheDocument(),
+      expect(within(list()).getByRole('button', { name: 'Архивировать сферу' })).toBeInTheDocument(),
     )
     expect(within(list()).queryByText(/в архиве/)).toBeNull()
   })
 
   it('shows a backend failure instead of pretending the list is empty', async () => {
     stubApi({
+      'GET /api/habits': () => jsonResponse([]),
       'GET /api/areas': () =>
         jsonResponse(
           { error: { code: 'internal_error', message: 'An unexpected error occurred.' } },
@@ -177,7 +182,7 @@ describe('AreasPage', () => {
         ),
     })
 
-    render(<AreasPage />)
+    render(<HabitsPage />)
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'На сервере произошла ошибка. Попробуйте ещё раз.',

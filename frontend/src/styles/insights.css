@@ -3,14 +3,14 @@
 .insight-filters {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .insight-explorer {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  padding: 12px;
+  padding: 10px;
   background: var(--color-surface);
 }
 
@@ -45,8 +45,8 @@
 .insight-summary {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin: 12px 0;
+  gap: 4px;
+  margin: 8px 0;
 }
 
 .insight-summary__line {
@@ -57,21 +57,21 @@
 
 .insight-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 12px;
   align-items: start;
 }
 
 .insight-feed {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .insight-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   position: sticky;
   top: 12px;
 }
@@ -93,37 +93,68 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  padding: 14px;
+  padding: 11px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .insight-card--selected {
   border-color: var(--color-accent);
 }
 
-.insight-card__header {
+.insight-card__topline {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
+/* The linked variables are context, not the headline: small and quiet. */
 .insight-card__pair {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.insight-card__arrow {
+  color: var(--color-text-muted);
+}
+
+/* The human conclusion is what the eye should hit first. */
+.insight-card__statement {
   font-size: 15px;
   font-weight: 600;
-}
-
-.insight-card__statement,
-.insight-detail__title {
-  font-size: 14px;
-  line-height: 1.45;
+  line-height: 1.4;
 }
 
 .insight-detail__title {
   font-size: 16px;
   font-weight: 600;
+  line-height: 1.45;
+}
+
+/* Secondary chips stay readable but do not compete with the statement. */
+.insight-chip--muted {
+  background: #f3f5f8;
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.insight-detail__summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.insight-detail__advanced[open] .insight-detail__summary {
+  margin-bottom: 8px;
 }
 
 .insight-card__chips,
@@ -247,8 +278,8 @@
 
 .insight-evidence {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-  gap: 8px 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 6px 14px;
   margin: 0;
 }
 
@@ -308,7 +339,7 @@
 .insight-charts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .insight-chart {
@@ -456,11 +487,5 @@
 .insight-filters .field { min-width: 0; max-width: 100%; }
 
 @media (max-width: 700px) {
-  .shell:has(.insight-filters) { grid-template-columns: minmax(0, 1fr); }
-  .shell:has(.insight-filters) .sidebar { position: static; height: auto; }
-  .shell:has(.insight-filters) .sidebar__nav ul { flex-direction: row; flex-wrap: wrap; }
-  .shell:has(.insight-filters) .topbar { flex-direction: column; padding: 12px; }
-  .shell:has(.insight-filters) .status { min-width: 0; width: 100%; }
-  .shell:has(.insight-filters) .content { padding: 12px; }
-  .insight-card__header { flex-wrap: wrap; }
+  .insight-card__topline { flex-wrap: wrap; }
 }

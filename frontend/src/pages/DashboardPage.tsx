@@ -1,6 +1,10 @@
+import { useEffect } from 'react'
+
 import { fetchDashboard } from '../api/dashboard'
+import { BackupReminder } from '../components/BackupReminder'
 import { ErrorBanner, LoadingText } from '../components/Feedback'
 import { OwlAssistantBanner } from '../components/owl/OwlAssistantBanner'
+import { setOwl } from '../components/owl/owlStore'
 import { RecordsPreviewCard } from '../components/records/RecordsPreviewCard'
 import { statusLabel } from '../components/daily/status'
 import { useAsyncData } from '../hooks/useAsyncData'
@@ -15,6 +19,12 @@ const WEEK_STATUS_LABELS: Record<string, string> = {
 
 export function DashboardPage() {
   const { data, error, loading, reload } = useAsyncData((signal) => fetchDashboard(signal), [])
+
+  // Keep the header mascot in step with the Owl the dashboard already derived;
+  // no second analytics pass and no extra request.
+  useEffect(() => {
+    if (data) setOwl(data.owl)
+  }, [data?.owl?.fingerprint])
 
   if (loading) {
     return (
@@ -39,18 +49,19 @@ export function DashboardPage() {
     <section className="page">
       <header className="page__header">
         <h1 className="page__title">Главный обзор</h1>
-        <span className="badge">Этап 6</span>
       </header>
       <p className="page__summary">
         Обзор вашей активности: результаты сегодняшнего дня, прогресс текущей недели,
         серии выполнений и вчерашнее состояние.
       </p>
 
+      <BackupReminder today={today} />
+
       <OwlAssistantBanner state={owl} />
 
       <div className="dashboard-grid">
         {/* Card 1: Сегодня */}
-        <section className="dashboard-card" aria-label="Сегодня">
+        <section className="dashboard-card dashboard-card--wide" aria-label="Сегодня">
           <header className="dashboard-card__header">
             <h2 className="dashboard-card__title">Сегодня</h2>
             <span className="badge">{formatFullDateLabel(today)}</span>
@@ -102,7 +113,7 @@ export function DashboardPage() {
         </section>
 
         {/* Card 2: Эта неделя */}
-        <section className="dashboard-card" aria-label="Эта неделя">
+        <section className="dashboard-card dashboard-card--wide" aria-label="Эта неделя">
           <header className="dashboard-card__header">
             <h2 className="dashboard-card__title">Эта неделя</h2>
             <span className="badge">

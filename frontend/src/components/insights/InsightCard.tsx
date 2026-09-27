@@ -15,40 +15,44 @@ interface Props {
   onOpen: (insight: InsightCandidateRead) => void
 }
 
-/** One relationship family, as the feed shows it: statement, chips, limitations. */
+/**
+ * One relationship family, as the feed shows it.
+ *
+ * The layout reads in the order a person does: the human conclusion first, then
+ * the linked variables and evidence level as quiet context, then limitations.
+ * Numbers never compete with the sentence that explains them.
+ */
 export function InsightCard({ insight, selected, onOpen }: Props) {
   const confidence = insight.confidence.level
+  const direction = insight.lag === 0 ? '↔' : insight.lag > 0 ? '→' : '←'
+
   return (
     <article
       className={selected ? 'insight-card insight-card--selected' : 'insight-card'}
       aria-label={`${insight.x.label} — ${insight.y.label}`}
       data-testid={`insight-${insight.fingerprint.slice(0, 8)}`}
     >
-      <header className="insight-card__header">
-        <h3 className="insight-card__pair">
+      <div className="insight-card__topline">
+        <p className="insight-card__pair">
           <span className="insight-card__variable">{insight.x.label}</span>
-          <span aria-hidden="true">{insight.lag === 0 ? ' ↔ ' : insight.lag > 0 ? ' → ' : ' ← '}</span>
+          <span className="insight-card__arrow" aria-hidden="true">{` ${direction} `}</span>
           <span className="insight-card__variable">{insight.y.label}</span>
-        </h3>
+        </p>
         <span className={`insight-chip insight-chip--status-${insight.status}`}>
           {STATUS_LABELS[insight.status]}
         </span>
-      </header>
+      </div>
 
       <p className="insight-card__statement">{insight.text.full}</p>
 
       <ul className="insight-card__chips">
-        <li className="insight-chip">{insight.text.timing}</li>
+        <li className="insight-chip insight-chip--muted">{insight.text.timing}</li>
         {confidence !== null ? (
           <li className="insight-chip insight-chip--confidence">{CONFIDENCE_LABELS[confidence]}</li>
         ) : null}
-        <li className="insight-chip">{VERDICT_LABELS[insight.guardrail.verdict]}</li>
-        <li className="insight-chip">
-          {`Наблюдений: ${formatCount(insight.evidence.sample.n)}`}
-        </li>
-        <li className="insight-chip">
-          {`Покрытие: ${formatRatio(insight.evidence.coverage.pair_coverage)}`}
-        </li>
+        <li className="insight-chip insight-chip--muted">{VERDICT_LABELS[insight.guardrail.verdict]}</li>
+        <li className="insight-chip insight-chip--muted">{`Наблюдений: ${formatCount(insight.evidence.sample.n)}`}</li>
+        <li className="insight-chip insight-chip--muted">{`Покрытие: ${formatRatio(insight.evidence.coverage.pair_coverage)}`}</li>
       </ul>
 
       {insight.caveats.length > 0 ? (
@@ -67,6 +71,9 @@ export function InsightCard({ insight, selected, onOpen }: Props) {
       ) : null}
 
       <footer className="insight-card__footer">
+        {insight.first_seen !== null ? (
+          <span className="insight-card__first-seen">{`Наблюдается с ${insight.first_seen}`}</span>
+        ) : <span />}
         <button
           type="button"
           className="button button--small"
@@ -75,9 +82,6 @@ export function InsightCard({ insight, selected, onOpen }: Props) {
         >
           Подробнее о доказательствах
         </button>
-        {insight.first_seen !== null ? (
-          <span className="insight-card__first-seen">{`Наблюдается с ${insight.first_seen}`}</span>
-        ) : null}
       </footer>
     </article>
   )

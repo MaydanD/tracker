@@ -2,25 +2,27 @@
 
 /* -- list ------------------------------------------------------------------- */
 
+/* Cards flow into columns: a list of experiments is not a single tall ribbon. */
 .experiment-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+  gap: 8px;
+  align-items: start;
   list-style: none;
-  margin: 16px 0 0;
+  margin: 0;
   padding: 0;
-  max-width: 960px;
+  max-width: var(--content-width);
 }
 
 .experiment-card {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-left: 4px solid var(--color-border);
   border-radius: var(--radius);
-  padding: 12px 14px;
+  padding: 10px 12px;
 }
 
 .experiment-card--active {
@@ -74,7 +76,7 @@
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .experiment-status {
@@ -121,15 +123,15 @@
 /* -- timeline --------------------------------------------------------------- */
 
 .experiment-timeline {
-  max-width: 960px;
+  max-width: var(--content-width);
 }
 
 .experiment-timeline__bar {
   position: relative;
   display: flex;
   gap: 4px;
-  height: 56px;
-  margin-bottom: 6px;
+  height: 44px;
+  margin-bottom: 4px;
 }
 
 .experiment-timeline__segment {
@@ -188,7 +190,7 @@
 
 .experiment-chart {
   margin: 0;
-  max-width: 960px;
+  max-width: var(--content-width);
 }
 
 .experiment-chart__plot {
@@ -248,7 +250,7 @@
 /* -- comparison ------------------------------------------------------------- */
 
 .experiment-compare {
-  max-width: 960px;
+  max-width: var(--content-width);
 }
 
 .experiment-compare__row {
@@ -264,7 +266,7 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  padding: 10px 12px;
+  padding: 8px 10px;
 }
 
 .experiment-compare__cell--during {
@@ -278,7 +280,7 @@
 }
 
 .experiment-compare__value {
-  font-size: 22px;
+  font-size: 19px;
 }
 
 .experiment-compare__coverage {
@@ -293,7 +295,7 @@
 
 .experiment-table-wrap {
   overflow-x: auto;
-  max-width: 960px;
+  max-width: var(--content-width);
 }
 
 .experiment-table {
@@ -313,7 +315,7 @@
 .experiment-table th,
 .experiment-table td {
   border-bottom: 1px solid var(--color-border);
-  padding: 7px 10px;
+  padding: 5px 10px;
   text-align: left;
   vertical-align: top;
 }
@@ -354,15 +356,15 @@
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .experiment-detail__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: 12px;
-  max-width: 960px;
-  margin-bottom: 16px;
+  gap: 10px;
+  max-width: var(--content-width);
+  margin-bottom: 10px;
 }
 
 .experiment-note p {
@@ -372,11 +374,11 @@
 
 .experiment-section__title {
   font-size: 15px;
-  margin: 22px 0 8px;
+  margin: 14px 0 8px;
 }
 
 .experiment-coverage {
-  max-width: 960px;
+  max-width: var(--content-width);
   font-size: 13px;
   margin: 0;
   padding-left: 18px;
@@ -384,7 +386,7 @@
 
 .experiment-summary {
   font-size: 14px;
-  max-width: 760px;
+  max-width: 100ch;
 }
 
 .experiment-disclaimer {

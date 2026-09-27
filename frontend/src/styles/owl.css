@@ -1,15 +1,16 @@
-/* Stage 9 Owl: a compact, non-modal context banner above the page cards. */
+/* The contextual Owl: a large, friendly illustration that is part of the
+   feedback state, plus a compact version of the same mascot in the top bar. */
 
 .owl-banner {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-left-width: 4px;
   border-radius: var(--radius);
-  padding: 12px 14px;
-  max-width: 960px;
+  padding: 10px 14px;
+  max-width: var(--content-width);
 }
 
 /* Tone only tints the accent; the text always carries the meaning. */
@@ -30,30 +31,37 @@
   border-left-color: var(--status-offline);
 }
 
-/* Fixed height, automatic width: the sticker keeps its own aspect ratio. */
+/*
+ * Still a real illustration — a square that reads as a picture, not a badge —
+ * but sized to sit next to the text instead of owning a whole band of the
+ * screen.
+ */
 .owl-banner__image {
   flex: none;
-  height: 72px;
-  width: auto;
-  max-width: 120px;
-  border-radius: 6px;
+  width: 124px;
+  height: 124px;
+  object-fit: contain;
+  border-radius: 10px;
 }
 
 .owl-banner__body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
   flex: 1;
 }
 
 .owl-banner__lead {
+  font-size: 15px;
   font-weight: 600;
+  line-height: 1.35;
 }
 
 .owl-banner__fact {
   color: var(--color-text-muted);
   font-size: 13px;
+  line-height: 1.4;
 }
 
 .owl-banner__dismiss {
@@ -61,14 +69,44 @@
   align-self: flex-start;
 }
 
-@media (max-width: 520px) {
+/* -- header mascot ---------------------------------------------------------- */
+
+.owl-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 10px;
+  padding: 2px;
+  transition: transform 120ms ease, background 120ms ease;
+}
+
+.owl-logo:hover {
+  background: rgba(47, 111, 208, 0.1);
+  transform: translateY(-1px);
+}
+
+/*
+ * The mascot is noticeable without setting the bar's height: it sits inside
+ * the same line as the name and the links.
+ */
+.owl-logo__image {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+@media (max-width: 640px) {
   .owl-banner {
-    flex-wrap: wrap;
+    flex-direction: column;
     align-items: flex-start;
+    gap: 10px;
   }
 
   .owl-banner__image {
-    height: 56px;
-    max-width: 90px;
+    width: 110px;
+    height: 110px;
+    align-self: center;
   }
 }

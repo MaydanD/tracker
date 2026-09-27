@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { describeApiError } from '../api/client'
@@ -8,6 +8,7 @@ import { EmptyState, ErrorBanner, LoadingText } from '../components/Feedback'
 import { ExperimentForm } from '../components/experiments/ExperimentForm'
 import { formatPhase, formatRange, STATUS_LABELS } from '../components/experiments/labels'
 import { OwlAssistantBanner } from '../components/owl/OwlAssistantBanner'
+import { setOwl } from '../components/owl/owlStore'
 import { localTodayIso } from '../components/daily/dates'
 import { useAsyncData } from '../hooks/useAsyncData'
 
@@ -20,6 +21,11 @@ export function ExperimentsPage() {
   const [actionError, setActionError] = useState<string | null>(null)
 
   const experiments = list.data?.experiments ?? []
+
+  // Publish this screen's Owl to the shared header mascot.
+  useEffect(() => {
+    if (list.data) setOwl(list.data.owl)
+  }, [list.data?.owl?.fingerprint])
 
   function closeForm() {
     setCreating(false)
@@ -44,7 +50,6 @@ export function ExperimentsPage() {
     <section className="page">
       <header className="page__header">
         <h1 className="page__title">Эксперименты</h1>
-        <span className="badge">Этап 10</span>
       </header>
       <p className="page__summary">
         Личные эксперименты: задайте период и гипотезу, а затем посмотрите, как показатели

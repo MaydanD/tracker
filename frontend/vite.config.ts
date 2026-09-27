@@ -4,6 +4,13 @@ import { defineConfig } from 'vitest/config'
 
 const DEFAULT_API_TARGET = 'http://127.0.0.1:8000'
 
+/**
+ * Deliberately not Vite's default 5173: the tracker keeps its own, less
+ * contended local port so it never collides with other Vite projects. Keep the
+ * backend CORS default (`TRACKER_CORS_ORIGINS`) in sync when this changes.
+ */
+export const DEV_SERVER_PORT = 17373
+
 export default defineConfig(() => {
   // The dev server proxies /api to FastAPI so the browser only ever talks to one
   // origin (no CORS round-trip) and components can use relative URLs.
@@ -12,8 +19,8 @@ export default defineConfig(() => {
   return {
     plugins: [react()],
     server: {
-      port: 5173,
-      // Not strict on purpose: if another Vite project already holds 5173 the
+      port: DEV_SERVER_PORT,
+      // Not strict on purpose: if another project already holds the port the
       // dev server moves to the next free port instead of failing. The /api
       // proxy below is what the app needs, and it is port-independent.
       strictPort: false,

@@ -34,9 +34,12 @@ from app.core.paths import (
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
+# The Tracker dev server uses a deliberately non-default local port (17373)
+# instead of Vite's 5173, so it does not collide with other Vite projects.
+# Keep this in sync with `DEV_SERVER_PORT` in frontend/vite.config.ts.
 DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    "http://localhost:17373",
+    "http://127.0.0.1:17373",
 )
 
 VALID_LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"})

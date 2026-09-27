@@ -34,10 +34,9 @@ export function AreaList({
             />
             <span className="list__main">
               <span className="list__title">{area.name}</span>
-              <span className="list__meta">
-                {area.color}
-                {area.is_archived ? ' · в архиве' : ''}
-              </span>
+              {area.is_archived ? (
+                <span className="list__note">в архиве</span>
+              ) : null}
             </span>
 
             <span className="list__actions">

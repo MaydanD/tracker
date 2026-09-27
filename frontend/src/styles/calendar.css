@@ -1,20 +1,37 @@
 /* Calendar and Heatmap styles */
 
+/*
+ * The month grid and the year heatmap share a row: the heatmap needs roughly
+ * 5/12 of the width to stay whole, the calendar is happy with the rest.
+ */
 .calendar-page {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  max-width: 1080px;
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+  gap: 12px;
+  align-items: start;
+  max-width: var(--content-width);
+}
+
+.calendar-page > .page__header,
+.calendar-page > .page__summary,
+.calendar-page > .day-card-panel {
+  grid-column: 1 / -1;
 }
 
 .calendar-section {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  padding: 20px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
+}
+
+@media (max-width: 1200px) {
+  .calendar-page {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .calendar-header {
@@ -26,7 +43,7 @@
 }
 
 .calendar-header__title {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
   margin: 0;
 }
@@ -40,24 +57,27 @@
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
+  gap: 4px;
 }
 
 .calendar-grid__weekday {
   text-align: center;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--color-text-muted);
-  padding: 6px 0;
+  padding: 2px 0;
 }
 
+/*
+ * Rows are sized by their content: with a square aspect ratio a wide window
+ * would blow each cell up to ~200px and push the whole page below the fold.
+ */
 .calendar-cell {
-  aspect-ratio: 1;
-  min-height: 54px;
+  min-height: 42px;
   background: #f8fafc;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  padding: 6px;
+  padding: 4px 6px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -107,21 +127,29 @@
   padding-bottom: 8px;
 }
 
+/*
+ * The year always fits its card: weeks share the width equally and each day
+ * stays square, so the heatmap never needs a horizontal scrollbar.
+ */
 .heatmap-grid {
-  display: flex;
-  gap: 4px;
-  min-width: 720px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 3px;
+  width: 100%;
 }
 
 .heatmap-week {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  min-width: 0;
 }
 
 .heatmap-cell {
-  width: 12px;
-  height: 12px;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
   border-radius: 2px;
   background: #ebedf0;
   cursor: pointer;
@@ -171,10 +199,10 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  padding: 20px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.05);
 }
 
@@ -184,5 +212,10 @@
   justify-content: space-between;
   gap: 12px;
   border-bottom: 1px solid var(--color-border);
-  padding-bottom: 10px;
+  padding-bottom: 8px;
+}
+
+/* The day card's habit list is the one wide block inside the panel. */
+.day-card-panel .dashboard-habits-list {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
 }

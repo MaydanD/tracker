@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { downloadData, reloadAfterRestore, restoreBackup, validateBackup, type BackupPreview } from '../api/backup'
+import { BackendStatus } from '../components/BackendStatus'
+import { useBackendStatus } from '../hooks/useBackendStatus'
 
 const labels: Record<string, string> = {
   areas: 'Сферы', habits: 'Привычки', habit_versions: 'Версии настроек',
@@ -13,6 +15,9 @@ function wasRestored() {
 }
 
 export function SettingsPage() {
+  // Moved out of the top bar: the connection state is diagnostics, so it lives
+  // here where a broken install is actually looked at.
+  const backend = useBackendStatus()
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<BackupPreview | null>(null)
   const [confirming, setConfirming] = useState(false)
@@ -82,51 +87,59 @@ export function SettingsPage() {
         <p role="status">Данные восстановлены. Предыдущая копия сохранена на сервере.</p>
         <Link className="button button--primary" to="/">Перейти на главный обзор</Link>
       </div>}
-      <section className="card" aria-labelledby="backup-title">
-        <h2 id="backup-title">Резервная копия</h2>
-        <p>Полная история: сферы, привычки и их настройки, отметки, состояния дня, эксперименты и снимки инсайтов. Рекорды и достижения пересчитаются после восстановления.</p>
-        <button className="button" disabled={busy !== null} onClick={() => void download('backup')}>Скачать резервную копию</button>
-      </section>
-      <section className="card" aria-labelledby="export-title">
-        <h2 id="export-title">Экспорт</h2>
-        <p>Для анализа вне Tracker: JSON или ZIP с отдельными CSV-таблицами. Для восстановления используйте резервную копию.</p>
-        <div className="toolbar">
-          <button className="button" disabled={busy !== null} onClick={() => void download('json')}>Экспортировать JSON</button>
-          <button className="button" disabled={busy !== null} onClick={() => void download('csv')}>Экспортировать CSV</button>
-        </div>
-      </section>
-      <section className="card" aria-labelledby="restore-title" aria-busy={busy === 'restoring'}>
-        <h2 id="restore-title">Восстановление</h2>
-        <label className="field">Выбрать файл резервной копии
-          <input ref={picker} type="file" accept=".zip,application/zip" disabled={busy === 'restoring' || busy === 'download'}
-            onChange={(event) => void selectFile(event.target.files?.[0] ?? null)} />
-        </label>
-        {file && <p>Выбран файл: {file.name}</p>}
-        {busy === 'checking' && <p role="status">Проверяем резервную копию…</p>}
-        {preview && <div>
-          <h3>Резервная копия от {new Date(preview.manifest.created_at + (/Z|[+-]\d\d:\d\d$/.test(preview.manifest.created_at) ? '' : 'Z')).toLocaleString('ru-RU')}</h3>
-          <p>Версия: {preview.manifest.version} · Схема: {preview.manifest.alembic_revision}</p>
-          <dl>{Object.entries(labels).map(([key, label]) => <div className="data-count" key={key}>
-            <dt>{label}</dt><dd>{preview.manifest.counts[key]}</dd>
-          </div>)}</dl>
-          <p>Текущие данные Tracker будут заменены данными из резервной копии.</p>
-          <p>Перед заменой сервер сохранит резервную копию текущих данных.</p>
-        </div>}
-        <div className="toolbar">
-          <button className="button button--primary" disabled={!preview || busy !== null || confirming}
-            onClick={() => setConfirming(true)}>Восстановить данные</button>
-          {file && <button className="button" disabled={busy === 'restoring'} onClick={reset}>Отменить</button>}
-        </div>
-        {confirming && <section className="restore-confirm" role="alertdialog" aria-labelledby="confirm-title" aria-describedby="confirm-description">
-          <h3 id="confirm-title">Подтвердите восстановление</h3>
-          <p id="confirm-description">Текущие данные будут заменены. Продолжить?</p>
+      {/* Cards flow into columns, so the page uses the window instead of one narrow stack. */}
+      <div className="data-settings__grid">
+        <section className="card" aria-labelledby="connection-title">
+          <h2 id="connection-title">Подключение</h2>
+          <p>Состояние сервера Tracker и его базы данных. Проверка повторяется автоматически.</p>
+          <BackendStatus backend={backend} />
+        </section>
+        <section className="card" aria-labelledby="backup-title">
+          <h2 id="backup-title">Резервная копия</h2>
+          <p>Полная история: сферы, привычки и их настройки, отметки, состояния дня, эксперименты и снимки инсайтов. Рекорды и достижения пересчитаются после восстановления.</p>
+          <button className="button" disabled={busy !== null} onClick={() => void download('backup')}>Скачать резервную копию</button>
+        </section>
+        <section className="card" aria-labelledby="export-title">
+          <h2 id="export-title">Экспорт</h2>
+          <p>Для анализа вне Tracker: JSON или ZIP с отдельными CSV-таблицами. Для восстановления используйте резервную копию.</p>
           <div className="toolbar">
-            <button className="button button--primary" disabled={busy !== null} onClick={() => void apply()}>Да, восстановить</button>
-            <button className="button" disabled={busy !== null} onClick={() => setConfirming(false)}>Вернуться к проверке</button>
+            <button className="button" disabled={busy !== null} onClick={() => void download('json')}>Экспортировать JSON</button>
+            <button className="button" disabled={busy !== null} onClick={() => void download('csv')}>Экспортировать CSV</button>
           </div>
-        </section>}
-        {busy === 'restoring' && <p role="status">Восстанавливаем данные. Дождитесь результата…</p>}
-      </section>
+        </section>
+        <section className="card card--wide" aria-labelledby="restore-title" aria-busy={busy === 'restoring'}>
+          <h2 id="restore-title">Восстановление</h2>
+          <label className="field">Выбрать файл резервной копии
+            <input ref={picker} type="file" accept=".zip,application/zip" disabled={busy === 'restoring' || busy === 'download'}
+              onChange={(event) => void selectFile(event.target.files?.[0] ?? null)} />
+          </label>
+          {file && <p>Выбран файл: {file.name}</p>}
+          {busy === 'checking' && <p role="status">Проверяем резервную копию…</p>}
+          {preview && <div>
+            <h3>Резервная копия от {new Date(preview.manifest.created_at + (/Z|[+-]\d\d:\d\d$/.test(preview.manifest.created_at) ? '' : 'Z')).toLocaleString('ru-RU')}</h3>
+            <p>Версия: {preview.manifest.version} · Схема: {preview.manifest.alembic_revision}</p>
+            <dl>{Object.entries(labels).map(([key, label]) => <div className="data-count" key={key}>
+              <dt>{label}</dt><dd>{preview.manifest.counts[key]}</dd>
+            </div>)}</dl>
+            <p>Текущие данные Tracker будут заменены данными из резервной копии.</p>
+            <p>Перед заменой сервер сохранит резервную копию текущих данных.</p>
+          </div>}
+          <div className="toolbar">
+            <button className="button button--primary" disabled={!preview || busy !== null || confirming}
+              onClick={() => setConfirming(true)}>Восстановить данные</button>
+            {file && <button className="button" disabled={busy === 'restoring'} onClick={reset}>Отменить</button>}
+          </div>
+          {confirming && <section className="restore-confirm" role="alertdialog" aria-labelledby="confirm-title" aria-describedby="confirm-description">
+            <h3 id="confirm-title">Подтвердите восстановление</h3>
+            <p id="confirm-description">Текущие данные будут заменены. Продолжить?</p>
+            <div className="toolbar">
+              <button className="button button--primary" disabled={busy !== null} onClick={() => void apply()}>Да, восстановить</button>
+              <button className="button" disabled={busy !== null} onClick={() => setConfirming(false)}>Вернуться к проверке</button>
+            </div>
+          </section>}
+          {busy === 'restoring' && <p role="status">Восстанавливаем данные. Дождитесь результата…</p>}
+        </section>
+      </div>
     </section>
   )
 }

@@ -193,12 +193,14 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:5173>. The Vite dev server proxies `/api` to the backend,
+Open <http://localhost:17373>. The Vite dev server proxies `/api` to the backend,
 so the browser only ever talks to one origin and the header status should read
 **Connected** with `Database: ok`.
 
-If another project already uses port 5173, Vite automatically picks the next free
-port — watch the terminal output for the URL. If you move the backend to a
+The dev server deliberately uses port **17373** instead of Vite's default 5173 so
+it does not collide with other Vite projects; the backend CORS default matches it.
+If that port is taken too, Vite automatically picks the next free port — watch the
+terminal output for the URL. If you move the backend to a
 different port, start Vite with
 `$env:VITE_API_PROXY_TARGET='http://127.0.0.1:8001'; npm run dev`.
 
@@ -250,7 +252,7 @@ See [`backend/.env.example`](backend/.env.example) for the full list.
 | `TRACKER_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `TRACKER_DATA_DIR` | `<repo>\.data` | Directory holding `tracker.db` |
 | `TRACKER_DATABASE_URL` | derived | Full SQLAlchemy URL; overrides `TRACKER_DATA_DIR` |
-| `TRACKER_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Browser origins allowed to call the API |
+| `TRACKER_CORS_ORIGINS` | `http://localhost:17373,http://127.0.0.1:17373` | Browser origins allowed to call the API |
 | `TRACKER_PORTABLE` | `false` | Packaged build: keep data next to the executable |
 
 Unrecognised `TRACKER_*` variables are reported as a warning at startup so typos
@@ -785,8 +787,10 @@ appear. No entry is ever deleted or rewritten because a habit was archived.
 
 Stage 12 Backup / Export / Restore is implemented; the official format is logical
 ZIP v1, with validation, explicit confirmation and atomic full replacement.
-Desktop packaging is deferred beyond Stage 12. Stage 13 focuses on hardening;
-packaging requires its own tested scope. Stage 11 remains a derived long-term-progress layer:
+Desktop packaging is deferred beyond Stage 12 and now has a concrete plan in
+[desktop-packaging.md](docs/desktop-packaging.md) (pywebview + PyInstaller reusing
+the existing FastAPI + React app). Stage 13 focuses on hardening; packaging
+requires its own tested scope. Stage 11 remains a derived long-term-progress layer:
 personal records and milestone achievements are computed from the current history,
 never stored. Stage 4 remains the source of progress and streaks, Stage 7A the
 canonical dataset, and Stage 8 the source of every statistical value. Later product

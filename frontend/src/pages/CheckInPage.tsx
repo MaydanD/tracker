@@ -7,6 +7,7 @@ import { DailyStatePanel } from '../components/daily/DailyStatePanel'
 import { EmptyState, ErrorBanner, InfoBanner, LoadingText } from '../components/Feedback'
 import { DayNavigator } from '../components/daily/DayNavigator'
 import { HabitDayList } from '../components/daily/HabitDayList'
+import { refreshOwl } from '../components/owl/owlStore'
 import { formatDayLabel, localTodayIso } from '../components/daily/dates'
 import { useAsyncData } from '../hooks/useAsyncData'
 
@@ -38,6 +39,9 @@ export function CheckInPage() {
 
   function refresh() {
     setRevision((value) => value + 1)
+    // Marking a day can change the Owl (all done, miss pile-up, records), so the
+    // header mascot is refreshed alongside the day's own data.
+    refreshOwl()
   }
 
   // Only the response for the date in the navigator is shown. A reload (after a
@@ -54,7 +58,6 @@ export function CheckInPage() {
     <section className="page">
       <header className="page__header">
         <h1 className="page__title">Итоги дня</h1>
-        <span className="badge">Этап 5</span>
       </header>
       <p className="page__summary">
         Отметьте состояние каждой привычки за выбранный день. Запись можно
@@ -79,8 +82,12 @@ export function CheckInPage() {
       <ErrorBanner message={error} />
       <ErrorBanner message={derived.error} />
       {derived.error ? <button className="button" onClick={derived.reload}>Повторить расчёт</button> : null}
-      {progress ? <ProgressSummary progress={progress} /> : null}
-      <DailyStatePanel date={entryDate} />
+
+      {/* Two panels side by side on a desktop window, stacked when narrow. */}
+      <div className="checkin-panels">
+        {progress ? <ProgressSummary progress={progress} /> : null}
+        <DailyStatePanel date={entryDate} />
+      </div>
 
       {day === null ? (
         <LoadingText>Загрузка отметок за {formatDayLabel(entryDate)}…</LoadingText>

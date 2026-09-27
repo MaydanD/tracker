@@ -84,12 +84,12 @@ def test_cors_origins_accept_a_comma_separated_string(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv(
-        "TRACKER_CORS_ORIGINS", "http://localhost:5173, http://127.0.0.1:5173 ,"
+        "TRACKER_CORS_ORIGINS", "http://localhost:17373, http://127.0.0.1:17373 ,"
     )
 
     assert build_settings().cors_origins == [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
+        "http://localhost:17373",
+        "http://127.0.0.1:17373",
     ]
 
 

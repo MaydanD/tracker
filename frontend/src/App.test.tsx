@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import App from './App'
 import { NAVIGATION_ITEMS } from './navigation'
+import { formatDayMonthLabel } from './utils/dateUtils'
 import {
   jsonResponse,
   stubApi,
@@ -12,16 +13,39 @@ import {
 } from './test/fetchStub'
 import { detailFixture, experimentFixture } from './test/experimentsFixture'
 
+/** Backend state now lives on the settings screen, not in the top bar. */
+function openSettings() {
+  fireEvent.click(screen.getByRole('link', { name: 'Настройки' }))
+}
+
 describe('App shell', () => {
+  it('redirects old area bookmarks to habits and removes the area navigation link', async () => {
+    stubHealthyBackend()
+    window.location.hash = '#/areas'
+    const view = render(<App />)
+    expect(await screen.findByRole('heading', { name: 'Привычки', level: 1 })).toBeInTheDocument()
+    await waitFor(() => expect(window.location.hash).toBe('#/habits'))
+    expect(screen.queryByRole('link', { name: 'Сферы' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Привычки' })).toHaveAttribute('aria-current', 'page')
+    view.unmount()
+    window.location.hash = '#/'
+  })
+
   it('renders the Tracker shell with every navigation destination', () => {
     stubHealthyBackend()
 
     render(<App />)
 
-    expect(screen.getByText('Tracker', { selector: '.sidebar__name' })).toBeInTheDocument()
+    expect(screen.getByText('Tracker', { selector: '.topbar__name' })).toBeInTheDocument()
     for (const item of NAVIGATION_ITEMS) {
       expect(screen.getByRole('link', { name: new RegExp(item.label, 'i') })).toBeInTheDocument()
     }
+    // The bar is navigation only: no connection state, no refresh control.
+    expect(screen.queryByText('Подключено')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Проверить снова' })).not.toBeInTheDocument()
+    // Today's local date rides along with the navigation.
+    expect(screen.getByText('Сегодня', { selector: '.topbar__today-label' })).toBeInTheDocument()
+    expect(screen.getByText(formatDayMonthLabel(), { selector: '.topbar__today-date' })).toBeInTheDocument()
   })
 
   it('shows the main dashboard by default', async () => {
@@ -38,6 +62,7 @@ describe('App shell', () => {
     stubHealthyBackend()
 
     render(<App />)
+    openSettings()
 
     await waitFor(() =>
       expect(screen.getByText('Подключено')).toBeInTheDocument(),
@@ -53,6 +78,7 @@ describe('App shell', () => {
     })
 
     render(<App />)
+    openSettings()
 
     await waitFor(() =>
       expect(screen.getByText('База данных недоступна')).toBeInTheDocument(),
@@ -69,6 +95,7 @@ describe('App shell', () => {
     })
 
     render(<App />)
+    openSettings()
 
     await waitFor(() =>
       expect(screen.getByText('Требуется обновление базы')).toBeInTheDocument(),
@@ -80,6 +107,7 @@ describe('App shell', () => {
     stubUnreachableBackend()
 
     render(<App />)
+    openSettings()
 
     await waitFor(() =>
       expect(screen.getByText('Сервер недоступен')).toBeInTheDocument(),
@@ -92,6 +120,7 @@ describe('App shell', () => {
     stubFetch(async () => jsonResponse('', 502))
 
     render(<App />)
+    openSettings()
 
     await waitFor(() =>
       expect(screen.getByText('Сервер недоступен')).toBeInTheDocument(),
@@ -159,6 +188,7 @@ describe('App shell', () => {
     const fetchMock = stubHealthyBackend()
 
     render(<App />)
+    openSettings()
     await waitFor(() => expect(screen.getByText('Подключено')).toBeInTheDocument())
 
     const callsBefore = fetchMock.mock.calls.length

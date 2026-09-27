@@ -4,20 +4,25 @@ import { createArea, updateArea } from '../../api/areas'
 import { describeApiError } from '../../api/client'
 import type { Area } from '../../api/types'
 import { ErrorBanner } from '../Feedback'
-
-/** Matches the API default so a new area always starts from a visible colour. */
-const DEFAULT_COLOR = '#4a7cc7'
+import { AREA_COLOR_PALETTE, pickAreaColor } from './areaColors'
 
 export interface AreaFormProps {
   /** The area being edited, or null when creating a new one. */
   area?: Area | null
+  /**
+   * Colours already in use, most recently used last. Only used to avoid handing
+   * a brand-new area the same colour as the previous one.
+   */
+  existingColors?: readonly string[]
   onSaved: (area: Area) => void
   onCancel: () => void
 }
 
-export function AreaForm({ area = null, onSaved, onCancel }: AreaFormProps) {
+export function AreaForm({ area = null, existingColors = [], onSaved, onCancel }: AreaFormProps) {
   const [name, setName] = useState(area?.name ?? '')
-  const [color, setColor] = useState(area?.color ?? DEFAULT_COLOR)
+  // Picked once, on first render, and then owned by the form: re-rendering (or
+  // changing the name) must never reshuffle the colour a new area will get.
+  const [color, setColor] = useState(() => area?.color ?? pickAreaColor(existingColors))
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -63,18 +68,36 @@ export function AreaForm({ area = null, onSaved, onCancel }: AreaFormProps) {
       </div>
 
       <div className="field">
-        <label className="field__label" htmlFor="area-color">
+        <span className="field__label" id="area-color-label">
           Цвет
-        </label>
-        <div className="field__row">
-          <input
-            id="area-color"
-            className="field__color"
-            type="color"
-            value={color}
-            onChange={(event) => setColor(event.target.value)}
-          />
-          <span className="field__hint">{color}</span>
+        </span>
+        <div className="area-colors" role="group" aria-labelledby="area-color-label">
+          {AREA_COLOR_PALETTE.map((paletteColor) => (
+            <button
+              key={paletteColor}
+              type="button"
+              className={
+                paletteColor.toLowerCase() === color.toLowerCase()
+                  ? 'area-color area-color--selected'
+                  : 'area-color'
+              }
+              style={{ backgroundColor: paletteColor }}
+              aria-label={`Цвет ${paletteColor}`}
+              aria-pressed={paletteColor.toLowerCase() === color.toLowerCase()}
+              onClick={() => setColor(paletteColor)}
+            />
+          ))}
+          <label className="area-color-custom">
+            <span className="field__hint">Другой цвет</span>
+            <input
+              id="area-color"
+              className="field__color"
+              type="color"
+              value={color}
+              aria-label="Свой цвет"
+              onChange={(event) => setColor(event.target.value)}
+            />
+          </label>
         </div>
       </div>
 

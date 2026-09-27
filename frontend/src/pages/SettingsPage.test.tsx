@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as backupApi from '../api/backup'
+import { HEALTHY_HEALTH, READY, jsonResponse } from '../test/fetchStub'
 import { SettingsPage } from './SettingsPage'
 
 vi.mock('../api/backup', async (importOriginal) => ({
@@ -23,6 +24,30 @@ function response(body: unknown, status = 200): Response {
 }
 
 function renderPage() { return render(<MemoryRouter><SettingsPage /></MemoryRouter>) }
+
+/**
+ * The page also shows the backend connection state, so requests answering it are
+ * handled here and stay invisible to the data assertions below.
+ */
+function withStatusRoutes(
+  next: (input: RequestInfo | URL, init?: RequestInit) => Response | Promise<Response>,
+) {
+  return async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.endsWith('/api/health')) return jsonResponse(HEALTHY_HEALTH)
+    if (url.endsWith('/api/ready')) return jsonResponse(READY)
+    return next(input, init)
+  }
+}
+
+const STATUS_PATHS = ['/api/health', '/api/ready']
+
+/** Recorded requests that carry backup data, ignoring the connection check. */
+function dataCalls() {
+  return vi.mocked(fetch).mock.calls.filter(
+    ([input]) => !STATUS_PATHS.some((path) => String(input).endsWith(path)),
+  )
+}
 function choose(name = 'backup.zip') {
   const file = new File(['archive'], name, { type: 'application/zip' })
   fireEvent.change(screen.getByLabelText('Выбрать файл резервной копии'), { target: { files: [file] } })
@@ -37,7 +62,7 @@ async function confirmPreview() {
 beforeEach(() => {
   sessionStorage.clear()
   vi.mocked(backupApi.reloadAfterRestore).mockClear()
-  vi.stubGlobal('fetch', vi.fn(async () => response(preview)))
+  vi.stubGlobal('fetch', vi.fn(withStatusRoutes(async () => response(preview))))
 })
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
@@ -79,14 +104,14 @@ describe('Данные и резервные копии', () => {
     }
     expect(screen.getByText('Текущие данные Tracker будут заменены данными из резервной копии.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Восстановить данные' })).toBeEnabled()
-    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(dataCalls()).toHaveLength(1)
   })
 
   it('requires a separate confirmation and reloads application data on success', async () => {
     renderPage()
     await confirmPreview()
     expect(screen.getByRole('alertdialog')).toHaveTextContent('Текущие данные будут заменены.')
-    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(dataCalls()).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: 'Да, восстановить' }))
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Данные восстановлены'))
     expect(fetch).toHaveBeenLastCalledWith('/api/backup/restore', expect.objectContaining({
@@ -108,11 +133,11 @@ describe('Данные и резервные копии', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Отменить' }))
     expect(screen.queryByText('834')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Восстановить данные' })).toBeDisabled()
-    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(dataCalls()).toHaveLength(1)
   })
 
   it('shows the exact invalid backup reason', async () => {
-    vi.mocked(fetch).mockResolvedValue(response({ error: { code: 'invalid_backup', message: 'Резервная копия создана более новой версией Tracker.' } }, 422))
+    vi.mocked(fetch).mockImplementation(withStatusRoutes(async () => response({ error: { code: 'invalid_backup', message: 'Резервная копия создана более новой версией Tracker.' } }, 422)))
     renderPage(); choose()
     expect(await screen.findByRole('alert')).toHaveTextContent('более новой версией')
     expect(screen.getByRole('button', { name: 'Восстановить данные' })).toBeDisabled()
@@ -121,7 +146,7 @@ describe('Данные и резервные копии', () => {
   it('reports restore failure and keeps the file available for retry', async () => {
     renderPage()
     await confirmPreview()
-    vi.mocked(fetch).mockResolvedValue(response({ error: { code: 'restore_failed', message: 'Текущие данные сохранены.' } }, 500))
+    vi.mocked(fetch).mockImplementation(withStatusRoutes(async () => response({ error: { code: 'restore_failed', message: 'Текущие данные сохранены.' } }, 500)))
     fireEvent.click(screen.getByRole('button', { name: 'Да, восстановить' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Текущие данные сохранены.')
     expect(screen.getByText('834')).toBeInTheDocument()
@@ -132,7 +157,7 @@ describe('Данные и резервные копии', () => {
   it('discards an old preview immediately when another file is selected', async () => {
     renderPage(); choose()
     await screen.findByText('834')
-    vi.mocked(fetch).mockImplementation(() => new Promise(() => {}))
+    vi.mocked(fetch).mockImplementation(withStatusRoutes(() => new Promise(() => {})))
     choose('other.zip')
     expect(screen.queryByText('834')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Восстановить данные' })).toBeDisabled()
@@ -140,7 +165,12 @@ describe('Данные и резервные копии', () => {
 
   it('ignores a late validation result from a previous file', async () => {
     let resolveFirst!: (value: Response) => void
-    vi.mocked(fetch).mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve }))
+    let validations = 0
+    vi.mocked(fetch).mockImplementation(withStatusRoutes(() => {
+      validations += 1
+      if (validations === 1) return new Promise<Response>((resolve) => { resolveFirst = resolve })
+      return response(preview)
+    }))
     renderPage(); choose('first.zip'); choose('second.zip')
     await screen.findByText('834')
     await act(async () => resolveFirst(response({ ...preview, manifest: { ...preview.manifest, counts: { habits: 999 } } })))
@@ -150,7 +180,7 @@ describe('Данные и резервные копии', () => {
 
   it('ignores a validation result after cancellation', async () => {
     let finish!: (value: Response) => void
-    vi.mocked(fetch).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    vi.mocked(fetch).mockImplementation(withStatusRoutes(() => new Promise((resolve) => { finish = resolve })))
     renderPage(); choose()
     fireEvent.click(screen.getByRole('button', { name: 'Отменить' }))
     await act(async () => finish(response(preview)))
@@ -159,7 +189,7 @@ describe('Данные и резервные копии', () => {
 
   it('blocks double restore and file replacement during application', async () => {
     renderPage(); await confirmPreview()
-    vi.mocked(fetch).mockImplementation(() => new Promise(() => {}))
+    vi.mocked(fetch).mockImplementation(withStatusRoutes(() => new Promise(() => {})))
     fireEvent.click(screen.getByRole('button', { name: 'Да, восстановить' }))
     expect(screen.getByRole('button', { name: 'Да, восстановить' })).toBeDisabled()
     expect(screen.getByLabelText('Выбрать файл резервной копии')).toBeDisabled()
@@ -174,7 +204,7 @@ describe('Данные и резервные копии', () => {
   })
 
   it('does not expose raw server errors and recovers download controls', async () => {
-    vi.mocked(fetch).mockResolvedValue(response({ error: { code: 'internal_error', message: 'Traceback secret path' } }, 500))
+    vi.mocked(fetch).mockImplementation(withStatusRoutes(async () => response({ error: { code: 'internal_error', message: 'Traceback secret path' } }, 500)))
     renderPage()
     fireEvent.click(screen.getByRole('button', { name: 'Скачать резервную копию' }))
     expect(await screen.findByRole('alert')).not.toHaveTextContent('Traceback')

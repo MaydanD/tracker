@@ -24,6 +24,8 @@ export interface HabitFormProps {
   areas: AreaOption[]
   /** The habit being edited, or null when creating a new one. */
   habit?: Habit | null
+  /** Fixed area for creation started inside an area card. Editing keeps the picker. */
+  areaId?: number
   onSaved: (habit: Habit) => void
   onCancel: () => void
 }
@@ -41,12 +43,12 @@ interface FormState {
   timesPerWeek: string
 }
 
-function initialState(habit: Habit | null | undefined): FormState {
+function initialState(habit: Habit | null | undefined, areaId?: number): FormState {
   if (!habit) {
     return {
       name: '',
       description: '',
-      areaId: '',
+      areaId: areaId === undefined ? '' : String(areaId),
       weight: 1,
       trackingMode: 'binary',
       quantityUnit: '',
@@ -127,8 +129,8 @@ function toInput(state: FormState): HabitInput {
   }
 }
 
-export function HabitForm({ areas, habit = null, onSaved, onCancel }: HabitFormProps) {
-  const [state, setState] = useState<FormState>(() => initialState(habit))
+export function HabitForm({ areas, habit = null, areaId, onSaved, onCancel }: HabitFormProps) {
+  const [state, setState] = useState<FormState>(() => initialState(habit, areaId))
   const [problems, setProblems] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -212,24 +214,31 @@ export function HabitForm({ areas, habit = null, onSaved, onCancel }: HabitFormP
       </div>
 
       <div className="field-row">
-        <div className="field">
-          <label className="field__label" htmlFor="habit-area">
-            Сфера
-          </label>
-          <select
-            id="habit-area"
-            className="field__input"
-            value={state.areaId}
-            onChange={(event) => update('areaId', event.target.value)}
-          >
-            <option value="">Выберите сферу…</option>
-            {areas.map((area) => (
-              <option key={area.id} value={area.id}>
-                {area.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {!habit && areaId !== undefined ? (
+          <div className="field">
+            <span className="field__label">Сфера</span>
+            <span>{areas.find((area) => area.id === areaId)?.name}</span>
+          </div>
+        ) : (
+          <div className="field">
+            <label className="field__label" htmlFor="habit-area">
+              Сфера
+            </label>
+            <select
+              id="habit-area"
+              className="field__input"
+              value={state.areaId}
+              onChange={(event) => update('areaId', event.target.value)}
+            >
+              <option value="">Выберите сферу…</option>
+              {areas.map((area) => (
+                <option key={area.id} value={area.id}>
+                  {area.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="field">
           <label className="field__label" htmlFor="habit-weight">

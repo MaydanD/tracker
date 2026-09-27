@@ -1,15 +1,16 @@
 /**
  * Navigation for the Tracker shell.
  *
- * Every entry exists now so the shell is stable; each screen is filled in by the
- * stage noted in `plannedIn` (see PROJECT-SPEC.md section 25).
+ * Entries are organised around the user's own things — today, habits,
+ * experiments, insights, records and settings — never around internal
+ * implementation stages. Each entry only needs a path, a label and a one-line
+ * description (shown as the link tooltip).
  */
 
 export interface NavigationItem {
   path: string
   label: string
   summary: string
-  plannedIn: string
 }
 
 export const NAVIGATION_ITEMS: NavigationItem[] = [
@@ -17,54 +18,40 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     path: '/',
     label: 'Обзор',
     summary: 'Оценка дня, серии выполнений, самочувствие, тепловая карта и комментарии совы.',
-    plannedIn: 'Этап 6',
   },
   {
     path: '/check-in',
     label: 'Итоги дня',
     summary: 'Отметки привычек, оценки и серии, настроение, энергия, сон и заметка дня.',
-    plannedIn: 'Этап 5',
   },
   {
     path: '/calendar',
     label: 'Календарь',
     summary: 'Календарь на месяц с подробностями дня и тепловая карта за год.',
-    plannedIn: 'Этап 6',
   },
   {
     path: '/habits',
     label: 'Привычки',
-    summary: 'Привычки: важность, способ учёта, единицы измерения и расписание.',
-    plannedIn: 'Этап 2',
-  },
-  {
-    path: '/areas',
-    label: 'Сферы',
-    summary: 'Сферы жизни для группировки привычек: названия, цвета и архив.',
-    plannedIn: 'Этап 2',
+    summary: 'Привычки по сферам: цвета, важность, способ учёта, расписание и архив.',
   },
   {
     path: '/insights',
     label: 'Инсайты',
     summary: 'Связи в ваших данных с подтверждениями и учётом задержки эффекта.',
-    plannedIn: 'Этап 8',
   },
   {
     path: '/experiments',
     label: 'Эксперименты',
     summary: 'Личные эксперименты со сравнением показателей до, во время и после.',
-    plannedIn: 'Этап 10',
   },
   {
     path: '/records',
     label: 'Рекорды',
     summary: 'Личные рекорды, достижения и серии пропусков.',
-    plannedIn: 'Этап 11',
   },
   {
     path: '/settings',
     label: 'Настройки',
     summary: 'Резервные копии, экспорт JSON и CSV, проверка и восстановление данных.',
-    plannedIn: 'Этап 12',
   },
 ]

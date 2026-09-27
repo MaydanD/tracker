@@ -15,6 +15,7 @@ import type {
 } from '../api/insights'
 import { EmptyState, ErrorBanner, InfoBanner, LoadingText } from '../components/Feedback'
 import { OwlAssistantBanner } from '../components/owl/OwlAssistantBanner'
+import { setOwl } from '../components/owl/owlStore'
 import { InsightCard } from '../components/insights/InsightCard'
 import { InsightDetail } from '../components/insights/InsightDetail'
 import { InsightFilters } from '../components/insights/InsightFilters'
@@ -172,6 +173,12 @@ export function InsightsPage({ today: pinnedToday }: Props = {}) {
   }, [query.start, query.end, feed, detail])
 
   const analytics: InsightAnalyticsRead | null = feed.data?.key === queryKey && feed.error === null ? feed.data.value : null
+
+  // Publish the insight Owl to the shared header mascot.
+  useEffect(() => {
+    setOwl(analytics?.owl ?? null)
+  }, [analytics?.owl?.fingerprint])
+
   const insights = query.variables?.length === 0 ? [] : analytics?.insights ?? []
   const counts = analytics?.summary.counts ?? null
   const labelFor = (key: string) => catalogue.data?.variables.find((variable) => variable.key === key)?.label ?? 'Показатель'
@@ -182,7 +189,6 @@ export function InsightsPage({ today: pinnedToday }: Props = {}) {
     <section className="page">
       <header className="page__header">
         <h1 className="page__title">Аналитика</h1>
-        <span className="badge">Этап 8</span>
       </header>
       <p className="page__summary">
         Связи в ваших данных: что видно в истории, насколько это подтверждено и какие

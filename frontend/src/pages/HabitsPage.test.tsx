@@ -29,6 +29,70 @@ function chooseSchedule(label: RegExp): void {
 }
 
 describe('HabitsPage', () => {
+  it('shows empty areas and creates a habit directly inside the chosen area', async () => {
+    const api = createFakeApi({ areas: [health, development] })
+    stubFakeApi(api)
+    render(<HabitsPage />)
+    const group = await screen.findByRole('region', { name: 'Development' })
+    expect(within(group).getByText('Пока нет привычек')).toBeInTheDocument()
+    fireEvent.click(within(group).getByRole('button', { name: 'Добавить привычку' }))
+    expect(screen.queryByLabelText('Сфера')).not.toBeInTheDocument()
+    fireEvent.change(within(group).getByLabelText('Название'), { target: { value: 'Contextual habit' } })
+    fireEvent.click(within(group).getByRole('button', { name: 'Создать привычку' }))
+    expect(await within(group).findByText('Contextual habit')).toBeInTheDocument()
+    expect(within(group).getByText('Привычек: 1')).toBeInTheDocument()
+    expect(api.habits[0]?.area_id).toBe(2)
+    expect(within(screen.getByRole('region', { name: 'Health' })).getByText('Пока нет привычек')).toBeInTheDocument()
+  })
+
+  it('updates the area name and colour without losing its nested habits', async () => {
+    const api = createFakeApi({ areas: [health], habits: [habitFixture({ name: 'Walking' })] })
+    stubFakeApi(api)
+    render(<HabitsPage />)
+    const group = await screen.findByRole('region', { name: 'Health' })
+    fireEvent.click(within(group).getByRole('button', { name: 'Изменить сферу' }))
+    fireEvent.change(within(group).getByLabelText('Название'), { target: { value: 'Wellbeing' } })
+    fireEvent.change(within(group).getByLabelText('Свой цвет'), { target: { value: '#123456' } })
+    fireEvent.click(within(group).getByRole('button', { name: 'Сохранить изменения' }))
+    const renamed = await screen.findByRole('region', { name: 'Wellbeing' })
+    expect(renamed).toHaveStyle({ borderLeftColor: '#123456' })
+    expect(within(renamed).getByText('Walking')).toBeInTheDocument()
+  })
+
+  it('moves an edited habit to the destination block and follows an active area filter', async () => {
+    const api = createFakeApi({ areas: [health, development], habits: [habitFixture({ name: 'Walking' })] })
+    stubFakeApi(api)
+    render(<HabitsPage />)
+    await screen.findByText('Walking')
+    fireEvent.change(screen.getByLabelText('Фильтр по сфере'), { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Изменить' }))
+    chooseArea(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить изменения' }))
+    await waitFor(() => expect(screen.getByLabelText('Фильтр по сфере')).toHaveValue('2'))
+    expect(await within(screen.getByRole('region', { name: 'Development' })).findByText('Walking')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Фильтр по сфере'), { target: { value: '' } })
+    expect(within(screen.getByRole('region', { name: 'Health' })).queryByText('Walking')).not.toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Health' })).getByText('Пока нет привычек')).toBeInTheDocument()
+  })
+
+  it('keeps archived habits under archived parents and allows restoring the parent first', async () => {
+    const archived = { ...health, is_archived: true }
+    const api = createFakeApi({ areas: [archived], habits: [habitFixture({ name: 'Walking', is_archived: true, area: archived })] })
+    stubFakeApi(api)
+    render(<HabitsPage />)
+    await screen.findByText(/Нет активных сфер/)
+    fireEvent.click(screen.getByLabelText('Показывать архивные'))
+    const group = await screen.findByRole('region', { name: 'Health' })
+    expect(await within(group).findByText('Walking')).toBeInTheDocument()
+    expect(within(group).queryByRole('button', { name: 'Добавить привычку' })).not.toBeInTheDocument()
+    fireEvent.click(within(group).getByRole('button', { name: 'Восстановить сферу' }))
+    await within(group).findByRole('button', { name: 'Добавить привычку' })
+    fireEvent.click(within(group).getByRole('button', { name: 'Восстановить' }))
+    await waitFor(() => expect(within(group).queryByText('В архиве')).not.toBeInTheDocument())
+    fireEvent.click(screen.getByLabelText('Показывать архивные'))
+    expect(within(group).getByText('Walking')).toBeInTheDocument()
+  })
+
   it('shows server field validation in Russian and preserves the draft', async () => {
     stubApi({
       'GET /api/areas': () => jsonResponse([health]),
@@ -310,7 +374,7 @@ describe('HabitsPage', () => {
     render(<HabitsPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'В архив' }))
 
-    expect(await screen.findByText(/Привычек пока нет/)).toBeInTheDocument()
+    expect(await screen.findByText(/Пока нет привычек/)).toBeInTheDocument()
     expect(api.habits[0]?.is_archived).toBe(true)
   })
 

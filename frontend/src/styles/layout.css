@@ -1,204 +1,142 @@
-/* Application shell: fixed sidebar on the left, content on the right. */
+/* Application shell: a compact top navigation bar above the routed content area. */
 
 .shell {
-  display: grid;
-  grid-template-columns: var(--sidebar-width) 1fr;
+  display: flex;
+  flex-direction: column;
   min-height: 100%;
 }
 
-/* -- sidebar ---------------------------------------------------------------- */
+/* -- top header ------------------------------------------------------------- */
 
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  background: var(--color-sidebar);
-  color: #ffffff;
-  padding: 20px 14px;
+/*
+ * One row, one padding step: the bar should read as navigation, not as a page
+ * block of its own. Brand and links share the line and wrap together when the
+ * viewport is narrow.
+ */
+.topbar {
   position: sticky;
   top: 0;
-  height: 100vh;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  padding: 7px clamp(12px, 2.5vw, 32px);
 }
 
-.sidebar__brand {
+.topbar__lead {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 6px;
+  gap: 9px;
+  min-width: 0;
 }
 
-.sidebar__logo {
-  font-size: 20px;
-  color: #6fa8ff;
-}
-
-.sidebar__name {
+.topbar__name {
+  color: var(--color-text);
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  text-decoration: none;
 }
 
-.sidebar__tagline {
-  color: var(--color-sidebar-muted);
+.topbar__name:hover {
+  color: var(--color-accent);
+}
+
+/* The current section, as a quiet suffix to the brand. */
+.topbar__title {
+  border-left: 1px solid var(--color-border);
+  color: var(--color-text-muted);
   font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  padding-left: 9px;
+  white-space: nowrap;
 }
 
-.sidebar__nav ul {
+/*
+ * Today's date, pushed to the navigation. Two short lines sit well inside the
+ * height the mascot already claims, so the bar does not grow.
+ */
+.topbar__today {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-left: auto;
+  line-height: 1.2;
+}
+
+.topbar__today-label {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.topbar__today-date {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* -- main navigation -------------------------------------------------------- */
+
+.topnav ul {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 2px;
 }
 
 .nav-link {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid transparent;
   border-radius: 6px;
-  color: #d7dee6;
-  padding: 7px 10px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.2;
+  padding: 5px 9px;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .nav-link:hover {
-  background: rgba(255, 255, 255, 0.07);
-}
-
-.nav-link--active {
-  background: rgba(111, 168, 255, 0.18);
-  color: #ffffff;
-  font-weight: 600;
-}
-
-.nav-link__stage {
-  color: var(--color-sidebar-muted);
-  font-size: 11px;
-}
-
-.sidebar__footer {
-  margin-top: auto;
-  color: var(--color-sidebar-muted);
-  font-size: 11px;
-  padding: 0 6px;
-}
-
-/* -- top bar / content ------------------------------------------------------ */
-
-.shell__main {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.topbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-  padding: 14px 24px;
-}
-
-.topbar__eyebrow {
-  color: var(--color-text-muted);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.topbar__title {
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.content {
-  padding: 24px;
-}
-
-/* -- backend status --------------------------------------------------------- */
-
-.status {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-bg);
-  padding: 10px 12px;
-  min-width: 380px;
-}
-
-.status__row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.status__dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  flex: none;
-}
-
-.status__dot--healthy {
-  background: var(--status-healthy);
-}
-
-.status__dot--degraded {
-  background: var(--status-degraded);
-}
-
-.status__dot--offline {
-  background: var(--status-offline);
-}
-
-.status__dot--checking {
-  background: var(--status-checking);
-}
-
-.status__label {
-  font-weight: 600;
-}
-
-.status__refresh {
-  margin-left: auto;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-  cursor: pointer;
-  padding: 3px 8px;
-}
-
-.status__refresh:hover {
-  border-color: var(--color-accent);
+  background: rgba(47, 111, 208, 0.08);
   color: var(--color-accent);
 }
 
-.status__details {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px 12px;
-  margin-top: 8px;
+.nav-link--active {
+  background: rgba(47, 111, 208, 0.12);
+  color: var(--color-accent);
+  font-weight: 600;
 }
 
-.status__details dt {
-  color: var(--color-text-muted);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+/* -- content ---------------------------------------------------------------- */
+
+/*
+ * Small, constant gutter: at 1440px this leaves roughly 96% of the window to
+ * the content, which is the width the app is designed around.
+ */
+.content {
+  flex: 1;
+  padding: clamp(12px, 1.6vw, 24px);
 }
 
-.status__details dd {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  overflow-wrap: anywhere;
-}
+/* -- narrow screens ---------------------------------------------------------- */
 
-.status__error {
-  border-top: 1px solid var(--color-border);
-  color: var(--status-offline);
-  font-size: 12px;
-  margin-top: 8px;
-  padding-top: 8px;
+/*
+ * The bar wraps on its own: navigation items flow onto a second line and keep
+ * the full width. Nothing is hidden and nothing scrolls sideways.
+ */
+@media (max-width: 760px) {
+  .topnav {
+    width: 100%;
+  }
 }

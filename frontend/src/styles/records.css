@@ -5,13 +5,12 @@
 .records-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 24px;
+  gap: 4px 24px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  padding: 12px 14px;
-  margin-bottom: 16px;
-  max-width: 960px;
+  padding: 10px 12px;
+  max-width: var(--content-width);
 }
 
 .records-summary__line {
@@ -22,7 +21,7 @@
 
 .records-section__title {
   font-size: 15px;
-  margin: 22px 0 10px;
+  margin: 14px 0 8px;
 }
 
 /* -- record cards ----------------------------------------------------------- */
@@ -31,17 +30,17 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
   gap: 12px;
-  max-width: 960px;
+  max-width: var(--content-width);
 }
 
 .record-card {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  padding: 12px 14px;
+  padding: 10px 12px;
 }
 
 .record-card--accent {
@@ -62,7 +61,7 @@
 }
 
 .record-card__value {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 600;
   margin: 0;
 }
@@ -120,7 +119,7 @@
 /* -- achievements ----------------------------------------------------------- */
 
 .achievements {
-  max-width: 960px;
+  max-width: var(--content-width);
 }
 
 .achievements__count {
@@ -132,7 +131,7 @@
   color: var(--color-text-muted);
   font-size: 12px;
   letter-spacing: 0.04em;
-  margin: 18px 0 8px;
+  margin: 12px 0 6px;
   text-transform: uppercase;
 }
 
@@ -153,12 +152,12 @@
 .achievement {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-left: 4px solid var(--color-border);
   border-radius: var(--radius);
-  padding: 10px 12px;
+  padding: 8px 10px;
 }
 
 .achievement--achieved {
@@ -254,8 +253,8 @@
 .records-preview__line {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin: 0 0 8px;
+  gap: 1px;
+  margin: 0;
 }
 
 .records-preview__label {

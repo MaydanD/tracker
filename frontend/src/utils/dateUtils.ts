@@ -157,3 +157,11 @@ export function formatShortDateLabel(iso: string): string {
   const dd = String(day).padStart(2, '0')
   return `${dd}.${mm}.${year}`
 }
+
+/**
+ * «27 сентября» for a local Date — no year and no leading zero. The header uses
+ * it for today, where the year is noise.
+ */
+export function formatDayMonthLabel(value: Date = new Date()): string {
+  return `${value.getDate()} ${MONTH_NAMES_GENITIVE[value.getMonth()]}`
+}

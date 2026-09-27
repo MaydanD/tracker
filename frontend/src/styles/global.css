@@ -3,8 +3,6 @@
 :root {
   --color-bg: #f5f6f8;
   --color-surface: #ffffff;
-  --color-sidebar: #1c2530;
-  --color-sidebar-muted: #8f9dad;
   --color-border: #dfe3e8;
   --color-text: #1c2530;
   --color-text-muted: #5c6875;
@@ -16,7 +14,12 @@
   --status-checking: #8f9dad;
 
   --radius: 8px;
-  --sidebar-width: 248px;
+  /*
+   * The window is the frame, not a document column: the content area fills it
+   * and only the app's own padding keeps the text off the edge. The token stays
+   * only as a safety net for very wide monitors.
+   */
+  --content-width: 1920px;
   --font-ui: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
   --font-mono: 'Cascadia Mono', Consolas, 'Courier New', monospace;
 }
@@ -63,24 +66,25 @@ button {
 .page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  max-width: 960px;
+  gap: 12px;
+  width: 100%;
+  max-width: var(--content-width);
 }
 
 .page__header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .page__title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
 }
 
 .page__summary {
   color: var(--color-text-muted);
-  max-width: 70ch;
+  max-width: 118ch;
 }
 
 .badge {
@@ -97,7 +101,7 @@ button {
   border: 1px dashed var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface);
-  padding: 20px;
+  padding: 14px;
 }
 
 .placeholder__title {

@@ -65,8 +65,9 @@ function HistoryRow({ snapshot }: { snapshot: InsightSnapshotRead }) {
 }
 
 /**
- * Everything a card can honestly show: the same verdict, the whole evidence, the
- * charts and (when a snapshot exists) how the evidence changed over time.
+ * Everything a card can honestly show, ordered for reading: the conclusion and
+ * its confidence, then the confirming charts, then the full statistical detail
+ * behind a disclosure so it never competes with the statement.
  */
 export function InsightDetail({
   detail,
@@ -88,8 +89,8 @@ export function InsightDetail({
           <li className={`insight-chip insight-chip--status-${candidate.status}`}>
             {STATUS_LABELS[candidate.status]}
           </li>
-          <li className="insight-chip">{candidate.text.timing}</li>
-          <li className="insight-chip">{VERDICT_LABELS[candidate.guardrail.verdict]}</li>
+          <li className="insight-chip insight-chip--muted">{candidate.text.timing}</li>
+          <li className="insight-chip insight-chip--muted">{VERDICT_LABELS[candidate.guardrail.verdict]}</li>
         </ul>
         <button type="button" className="button button--small" onClick={onRefresh} disabled={refreshing}>
           {refreshing ? 'Обновляем историю…' : 'Обновить историю оценок'}
@@ -116,8 +117,49 @@ export function InsightDetail({
           : 'Уровень рассчитан по вашим данным, а не по общим нормам.'}</p>
       </section>
 
-      <section className="insight-detail__block" aria-label="Доказательная база">
-        <h3 className="card__title">Подробнее о доказательствах</h3>
+      {detail !== null ? (
+        <section className="insight-detail__block" aria-label="Графики">
+          <h3 className="card__title">Графики</h3>
+          <div className="insight-charts">
+            {candidate.x.type === 'boolean' ? (
+              <BooleanStrip series={detail.chart.x} title={`Отметки: ${candidate.x.label}`}
+                summary={summaryFor(detail, 'series')} />
+            ) : (
+              <SeriesChart series={detail.chart.x} title={`Динамика: ${candidate.x.label}`}
+                summary={summaryFor(detail, 'series')} />
+            )}
+            {candidate.y.type === 'boolean' ? (
+              <BooleanStrip series={detail.chart.y} title={`Отметки: ${candidate.y.label}`}
+                summary={summaryFor(detail, 'series')} />
+            ) : (
+              <SeriesChart series={detail.chart.y} title={`Динамика: ${candidate.y.label}`}
+                summary={summaryFor(detail, 'series')} />
+            )}
+            {detail.chart.pairs.length > 0 ? (
+              <ScatterChart pairs={detail.chart.pairs} xLabel={candidate.x.label} yLabel={candidate.y.label}
+                title="Совместные наблюдения" summary={summaryFor(detail, 'relationship')} />
+            ) : null}
+            {group !== null ? (
+              <GroupBars group={group} exposureLabel={exposure.label} title="Сравнение групп"
+                summary={summaryFor(detail, 'groups')} />
+            ) : null}
+            <LagProfileChart alternatives={candidate.alternatives} title="Профиль задержек"
+              summary={summaryFor(detail, 'lag_profile')} />
+            {candidate.evidence.segments.length > 0 ? (
+              <SegmentChart segments={candidate.evidence.segments} title="Отрезки истории"
+                summary={summaryFor(detail, 'segments')} />
+            ) : (
+              <ChartFigure title="Отрезки истории" summary="История не разделена на отрезки."
+                label="Отрезки истории: данных недостаточно">
+                <span />
+              </ChartFigure>
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      <details className="insight-detail__block insight-detail__advanced">
+        <summary className="insight-detail__summary">Подробнее о доказательствах</summary>
         <dl className="insight-evidence">
           <div>
             <dt>Период</dt>
@@ -214,51 +256,10 @@ export function InsightDetail({
             ))}
           </tbody>
         </table></div>
-      </section>
+      </details>
 
-      {detail !== null ? (
-        <section className="insight-detail__block" aria-label="Графики">
-          <h3 className="card__title">Графики</h3>
-          <div className="insight-charts">
-            {candidate.x.type === 'boolean' ? (
-              <BooleanStrip series={detail.chart.x} title={`Отметки: ${candidate.x.label}`}
-                summary={summaryFor(detail, 'series')} />
-            ) : (
-              <SeriesChart series={detail.chart.x} title={`Динамика: ${candidate.x.label}`}
-                summary={summaryFor(detail, 'series')} />
-            )}
-            {candidate.y.type === 'boolean' ? (
-              <BooleanStrip series={detail.chart.y} title={`Отметки: ${candidate.y.label}`}
-                summary={summaryFor(detail, 'series')} />
-            ) : (
-              <SeriesChart series={detail.chart.y} title={`Динамика: ${candidate.y.label}`}
-                summary={summaryFor(detail, 'series')} />
-            )}
-            {detail.chart.pairs.length > 0 ? (
-              <ScatterChart pairs={detail.chart.pairs} xLabel={candidate.x.label} yLabel={candidate.y.label}
-                title="Совместные наблюдения" summary={summaryFor(detail, 'relationship')} />
-            ) : null}
-            {group !== null ? (
-              <GroupBars group={group} exposureLabel={exposure.label} title="Сравнение групп"
-                summary={summaryFor(detail, 'groups')} />
-            ) : null}
-            <LagProfileChart alternatives={candidate.alternatives} title="Профиль задержек"
-              summary={summaryFor(detail, 'lag_profile')} />
-            {candidate.evidence.segments.length > 0 ? (
-              <SegmentChart segments={candidate.evidence.segments} title="Отрезки истории"
-                summary={summaryFor(detail, 'segments')} />
-            ) : (
-              <ChartFigure title="Отрезки истории" summary="История не разделена на отрезки."
-                label="Отрезки истории: данных недостаточно">
-                <span />
-              </ChartFigure>
-            )}
-          </div>
-        </section>
-      ) : null}
-
-      <section className="insight-detail__block" aria-label="Задержки">
-        <h3 className="card__title">Проверенные задержки</h3>
+      <details className="insight-detail__block insight-detail__advanced">
+        <summary className="insight-detail__summary">Проверенные задержки</summary>
         <div className="insight-table-scroll" role="region" aria-label="Таблица доказательств" tabIndex={0}><table className="insight-table">
           <caption className="insight-table__caption">
             Показана одна задержка, остальные остаются здесь: сравнивать их можно только после общей поправки.
@@ -287,7 +288,7 @@ export function InsightDetail({
             ))}
           </tbody>
         </table></div>
-      </section>
+      </details>
 
       {candidate.caveats.length > 0 ? (
         <section className="insight-detail__block" aria-label="Ограничения">
