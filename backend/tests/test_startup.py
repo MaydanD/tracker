@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from app.core.config import Settings
 from app.core.errors import DatabaseUnavailableError
 from app.main import create_app
+from tests.helpers import run_migrations
 
 
 def test_factory_binds_settings_and_database(
@@ -17,6 +18,39 @@ def test_factory_binds_settings_and_database(
 ) -> None:
     assert app.state.settings is migrated_settings
     assert app.state.database.database_url == migrated_settings.resolved_database_url
+
+
+def test_startup_creates_the_shipped_habits_once(tmp_path: Path) -> None:
+    """A real (non-test) start creates the 24 habits, and a restart adds none.
+
+    The canonical set is reconciled on every start, so a second start has to be
+    a no-op rather than a second copy of the whole set.
+    """
+    settings = Settings(
+        _env_file=None,
+        app_env="development",
+        data_dir=tmp_path / "shipped",
+        log_level="WARNING",
+    )
+    settings.ensure_directories()
+    run_migrations(settings.resolved_database_url)
+
+    with TestClient(create_app(settings)) as first:
+        areas = first.get("/api/areas").json()
+        habits = first.get("/api/habits").json()
+
+    assert [area["name"] for area in areas] == [
+        "Тело",
+        "Развитие",
+        "Досуг",
+        "Питание и вещества",
+    ]
+    assert len(habits) == 24
+    assert all(habit["importance"] == "normal" for habit in habits)
+
+    with TestClient(create_app(settings)) as second:
+        assert len(second.get("/api/habits").json()) == 24
+        assert len(second.get("/api/areas").json()) == 4
 
 
 def test_startup_creates_the_data_directory(tmp_path: Path) -> None:
@@ -47,6 +81,10 @@ def test_factory_returns_independent_applications(tmp_path: Path) -> None:
 
 
 EXPECTED_PATHS = {
+    "/api/backup/settings",
+    "/api/backup/telegram/check",
+    "/api/backup/telegram/send",
+    "/api/backup/auto",
     # Stage 8 — insights
     "/api/analytics/insights",
     "/api/analytics/insights/variables",
@@ -78,7 +116,7 @@ EXPECTED_PATHS = {
     "/api/habits/{habit_id}/unarchive",
     "/api/habits/{habit_id}/versions",
     "/api/habits/{habit_id}/configuration",
-    # Stage 3 — daily tracking
+    # Stage 3 — daily tracking (value-scaled habits are answered here too)
     "/api/days/{entry_date}",
     "/api/habits/{habit_id}/entries/{entry_date}",
     # Stage 6 — dashboard & calendar
@@ -122,7 +160,10 @@ def test_habits_and_areas_cannot_be_hard_deleted(client: TestClient) -> None:
         if method.lower() == "delete"
     }
 
-    assert delete_operations == {"DELETE /api/habits/{habit_id}/entries/{entry_date}", "DELETE /api/days/{state_date}/state"}
+    assert delete_operations == {
+        "DELETE /api/habits/{habit_id}/entries/{entry_date}",
+        "DELETE /api/days/{state_date}/state",
+    }
 
 
 def test_interactive_docs_are_available(client: TestClient) -> None:

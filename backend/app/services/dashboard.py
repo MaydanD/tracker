@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Area
 from app.db.models.daily_state import DailyState
 from app.domain.progress import Streak, day_progress, streak_summary, week_progress
+from app.domain.tracking import max_value, normalised_value
 from app.schemas.daily import DayItemRead
 from app.schemas.daily_state import DailyStateRead
 from app.schemas.records import RecordsPreviewRead
@@ -49,16 +50,29 @@ def get_calendar_range(
                 area = areas.get(version.area_id)
                 if area is None:
                     continue
-                total = area_totals.setdefault(version.area_id, [0, 0])
-                total[1] += 1
-                total[0] += int(entry_status == "done")
+                raw = history.values.get(curr)
+                if version.tracks_value:
+                    if raw is None:
+                        continue
+                    fraction = normalised_value(raw, version.value_type, version.direction)
+                    # A neutral trend is the observed scale, without an evaluation.
+                    trend = raw / max_value(version.value_type) if fraction is None else fraction
+                else:
+                    fraction = trend = int(entry_status == "done")
+                if fraction is not None:
+                    total = area_totals.setdefault(version.area_id, [0, 0])
+                    total[1] += 1
+                    total[0] += fraction
                 habit_scores.append({
                     "habit_id": history.habit_id,
                     "name": version.name,
                     "area_id": area.id,
                     "area_name": area.name,
                     "color": area.color,
-                    "score": 100.0 if entry_status == "done" else 0.0,
+                    "score": trend * 100,
+                    "value": raw,
+                    "value_type": version.value_type,
+                    "direction": version.direction,
                 })
         area_scores = [
             {
@@ -100,7 +114,12 @@ def get_dashboard_data(
     today_state = daily_state_service.get_state(session, today)
 
     day = day_progress(histories, today)
-    summaries = tuple(streak_summary(h, today) for h in histories)
+    # Current streaks belong to the habits that exist today: a retired habit keeps
+    # its history (and its old dates still read correctly) but is not part of the
+    # user's present-day list, exactly as it is absent from the day's items.
+    summaries = tuple(
+        streak_summary(h, today) for h in histories if h.active_on(today)
+    )
     items = day_overview(session, today)
     # Stage 11: the compact records block, computed from the histories already in
     # memory so the dashboard never loads habit history twice.

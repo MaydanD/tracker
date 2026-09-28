@@ -3,15 +3,26 @@ import { useState, type FormEvent } from 'react'
 import { describeApiError } from '../../api/client'
 import { createHabit, updateHabit } from '../../api/habits'
 import type {
+  Direction,
   Habit,
   HabitInput,
+  Importance,
   ScheduleInput,
   ScheduleType,
-  TrackingMode,
 } from '../../api/types'
 import { ErrorBanner, InfoBanner } from '../Feedback'
 import { HabitScheduleFields } from './HabitScheduleFields'
-import { TRACKING_MODE_OPTIONS, WEIGHT_OPTIONS } from './options'
+import {
+  DEFAULT_SCALE_LABELS,
+  DIRECTION_OPTIONS,
+  IMPORTANCE_OPTIONS,
+  WEIGHT_OPTIONS,
+  MARK_KIND_OPTIONS,
+  markKindOf,
+  scaleLengthOf,
+  valueTypeOf,
+  type MarkKind,
+} from './options'
 
 /** Only what the picker needs, so an archived area can stay selectable. */
 export interface AreaOption {
@@ -34,10 +45,15 @@ interface FormState {
   name: string
   description: string
   areaId: string
+  importance: Importance
   weight: number
-  trackingMode: TrackingMode
+  /** How a day is answered: completion, quantity, or a value scale. */
+  markKind: MarkKind
   quantityUnit: string
   allowsDecimal: boolean
+  /** Words of the value scale, up to four; only the used ones are submitted. */
+  valueLabels: string[]
+  direction: Direction
   scheduleType: ScheduleType
   weekdays: number[]
   timesPerWeek: string
@@ -49,24 +65,33 @@ function initialState(habit: Habit | null | undefined, areaId?: number): FormSta
       name: '',
       description: '',
       areaId: areaId === undefined ? '' : String(areaId),
+      // A new habit is ordinary unless the user says otherwise, and carries no
+      // judgement about which end of its scale is good.
+      importance: 'normal',
       weight: 1,
-      trackingMode: 'binary',
+      markKind: 'completion',
       quantityUnit: '',
       allowsDecimal: false,
+      valueLabels: [...DEFAULT_SCALE_LABELS.ordinal_4],
+      direction: 'neutral',
       scheduleType: 'daily',
       weekdays: [0, 1, 2, 3, 4],
       timesPerWeek: '3',
     }
   }
 
+  const markKind = markKindOf(habit.tracking_mode, habit.value_type)
   return {
     name: habit.name,
     description: habit.description ?? '',
     areaId: String(habit.area_id),
+    importance: habit.importance,
     weight: habit.weight,
-    trackingMode: habit.tracking_mode,
+    markKind,
     quantityUnit: habit.quantity_unit ?? '',
     allowsDecimal: habit.quantity_allows_decimal,
+    valueLabels: [...(habit.value_labels ?? DEFAULT_SCALE_LABELS.ordinal_4)],
+    direction: habit.direction ?? 'neutral',
     scheduleType: habit.schedule.type,
     weekdays: habit.schedule.weekdays,
     timesPerWeek: String(habit.schedule.times_per_week ?? 3),
@@ -87,8 +112,16 @@ function validate(state: FormState): string[] {
   if (state.name.trim() === '') problems.push('Введите название привычки.')
   if (state.areaId === '') problems.push('Выберите сферу.')
 
-  if (state.trackingMode === 'binary_quantity' && state.quantityUnit.trim() === '') {
+  if (state.markKind === 'quantity' && state.quantityUnit.trim() === '') {
     problems.push('Укажите единицу измерения, например страницы, км или повторения.')
+  }
+
+  const isValue = valueTypeOf(state.markKind) !== null
+  if (isValue) {
+    const labels = state.valueLabels.slice(0, scaleLengthOf(state.markKind))
+    if (labels.some((label) => label.trim() === '')) {
+      problems.push('У каждого значения шкалы должно быть слово.')
+    }
   }
 
   if (state.scheduleType === 'weekdays' && state.weekdays.length === 0) {
@@ -116,15 +149,25 @@ function buildSchedule(state: FormState): ScheduleInput {
 }
 
 function toInput(state: FormState): HabitInput {
-  const quantity = state.trackingMode === 'binary_quantity'
+  const quantity = state.markKind === 'quantity'
+  const valueType = valueTypeOf(state.markKind)
   return {
     name: state.name.trim(),
     description: state.description.trim() === '' ? null : state.description.trim(),
     area_id: Number(state.areaId),
     weight: state.weight,
-    tracking_mode: state.trackingMode,
+    importance: state.importance,
+    tracking_mode: quantity ? 'binary_quantity' : 'binary',
     quantity_unit: quantity ? state.quantityUnit.trim() : null,
     quantity_allows_decimal: quantity ? state.allowsDecimal : false,
+    value_type: valueType,
+    value_labels:
+      valueType === null
+        ? null
+        : state.valueLabels
+            .slice(0, scaleLengthOf(state.markKind))
+            .map((label) => label.trim()),
+    direction: valueType === null ? null : state.direction,
     schedule: buildSchedule(state),
   }
 }
@@ -137,6 +180,25 @@ export function HabitForm({ areas, habit = null, areaId, onSaved, onCancel }: Ha
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setState((current) => ({ ...current, [key]: value }))
+  }
+
+  /**
+   * Switching the mark kind re-states the words of the new scale.
+   *
+   * A scale's words belong to that scale, so «0 / мало / нормально / много» must
+   * not survive into a да/нет habit: the two positions would carry the wrong
+   * words until the user noticed.
+   */
+  function changeMarkKind(kind: MarkKind) {
+    setState((current) => {
+      const valueType = valueTypeOf(kind)
+      return {
+        ...current,
+        markKind: kind,
+        valueLabels:
+          valueType === null ? current.valueLabels : [...DEFAULT_SCALE_LABELS[valueType]],
+      }
+    })
   }
 
   function toggleWeekday(weekday: number) {
@@ -172,6 +234,9 @@ export function HabitForm({ areas, habit = null, areaId, onSaved, onCancel }: Ha
   }
 
   const noAreas = areas.length === 0
+  // A value habit asks «how much» instead of «did it happen», so its scale, its
+  // words and its direction are part of the form; a completion habit has none.
+  const isValueHabit = valueTypeOf(state.markKind) !== null
 
   return (
     // noValidate: browser constraint validation would silently block submission
@@ -241,18 +306,25 @@ export function HabitForm({ areas, habit = null, areaId, onSaved, onCancel }: Ha
         )}
 
         <div className="field">
-          <label className="field__label" htmlFor="habit-weight">
+          <label className="field__label" htmlFor="habit-weight">Вес в оценке</label>
+          <select id="habit-weight" className="field__input" value={state.weight}
+            onChange={(event) => update('weight', Number(event.target.value))}>
+            {WEIGHT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label className="field__label" htmlFor="habit-importance">
             Важность
           </label>
           <select
-            id="habit-weight"
+            id="habit-importance"
             className="field__input"
-            value={state.weight}
-            onChange={(event) => update('weight', Number(event.target.value))}
+            value={state.importance}
+            onChange={(event) => update('importance', event.target.value as Importance)}
           >
-            {WEIGHT_OPTIONS.map((option) => (
+            {IMPORTANCE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
-                {option.value} — {option.label}
+                {option.label}
               </option>
             ))}
           </select>
@@ -260,16 +332,16 @@ export function HabitForm({ areas, habit = null, areaId, onSaved, onCancel }: Ha
       </div>
 
       <fieldset className="fieldset">
-        <legend className="fieldset__legend">Способ учёта</legend>
+        <legend className="fieldset__legend">Тип отметки</legend>
         <div className="choice-group">
-          {TRACKING_MODE_OPTIONS.map((option) => (
+          {MARK_KIND_OPTIONS.map((option) => (
             <label key={option.value} className="choice">
               <input
                 type="radio"
-                name="tracking-mode"
+                name="mark-kind"
                 value={option.value}
-                checked={state.trackingMode === option.value}
-                onChange={() => update('trackingMode', option.value as TrackingMode)}
+                checked={state.markKind === option.value}
+                onChange={() => changeMarkKind(option.value)}
               />
               <span>
                 {option.label}
@@ -281,7 +353,56 @@ export function HabitForm({ areas, habit = null, areaId, onSaved, onCancel }: Ha
           ))}
         </div>
 
-        {state.trackingMode === 'binary_quantity' ? (
+        {isValueHabit ? (
+          <div className="field-row">
+            <div className="field">
+              <span className="field__label">Значения шкалы</span>
+              {state.valueLabels
+                .slice(0, scaleLengthOf(state.markKind))
+                .map((label, index) => (
+                  <input
+                    key={index}
+                    aria-label={`Значение ${index}`}
+                    className="field__input"
+                    maxLength={40}
+                    value={label}
+                    placeholder={DEFAULT_SCALE_LABELS.ordinal_4[index]}
+                    onChange={(event) =>
+                      update(
+                        'valueLabels',
+                        state.valueLabels.map((current, position) =>
+                          position === index ? event.target.value : current,
+                        ),
+                      )
+                    }
+                  />
+                ))}
+            </div>
+            <div className="field">
+              <label className="field__label" htmlFor="habit-direction">
+                Направление
+              </label>
+              <select
+                id="habit-direction"
+                className="field__input"
+                value={state.direction}
+                onChange={(event) => update('direction', event.target.value as Direction)}
+              >
+                {DIRECTION_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <span className="field__hint">
+                Что значит большее значение. Это метаданные для аналитики, а не
+                важность привычки.
+              </span>
+            </div>
+          </div>
+        ) : null}
+
+        {state.markKind === 'quantity' ? (
           <div className="field-row">
             <div className="field">
               <label className="field__label" htmlFor="habit-unit">

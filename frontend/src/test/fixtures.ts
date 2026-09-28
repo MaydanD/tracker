@@ -56,14 +56,19 @@ export function habitFixture(overrides: Partial<Habit> = {}): Habit {
   const area = overrides.area ?? areaSummary(areaFixture())
   return {
     id: 1,
+    key: null,
     name: 'Reading',
     description: null,
     area_id: area.id,
     area,
+    importance: 'normal',
     weight: 1,
     tracking_mode: 'binary',
     quantity_unit: null,
     quantity_allows_decimal: false,
+    value_type: null,
+    value_labels: null,
+    direction: null,
     schedule: dailySchedule(),
     is_archived: false,
     archived_at: null,
@@ -84,6 +89,7 @@ export function dailyEntryFixture(overrides: Partial<DailyEntry> = {}): DailyEnt
     habit_id: 1,
     entry_date: localTodayIso(),
     status: 'done',
+    value: null,
     quantity_value: null,
     quantity_unit: null,
     skip_reason: null,
@@ -100,10 +106,14 @@ export function dayItemFixture(overrides: Partial<DayItem> = {}): DayItem {
     habit_id: 1,
     name: 'Reading',
     area: areaSummary(areaFixture()),
+    importance: 'normal',
     weight: 1,
     tracking_mode: 'binary',
     quantity_unit: null,
     quantity_allows_decimal: false,
+    value_type: null,
+    value_labels: null,
+    direction: null,
     schedule: dailySchedule(),
     is_archived: false,
     entry: null,
@@ -135,11 +145,31 @@ export function versionFixture(overrides: Partial<HabitVersion> = {}): HabitVers
     description: null,
     area_id: 1,
     area: areaSummary(areaFixture()),
+    importance: 'normal',
     weight: 1,
     tracking_mode: 'binary',
     quantity_unit: null,
     quantity_allows_decimal: false,
+    value_type: null,
+    value_labels: null,
+    direction: null,
     schedule: dailySchedule(),
     ...overrides,
   }
+}
+
+/**
+ * A habit answered on a value scale, the kind the canonical set ships.
+ *
+ * Its words and its direction are configuration, so a test states them here
+ * rather than hardcoding them in a component.
+ */
+export function valueHabitFixture(overrides: Partial<Habit> = {}): Habit {
+  return habitFixture({
+    name: 'Настроение',
+    value_type: 'ordinal_4',
+    value_labels: ['ужас', 'плохо', 'норм', 'хорошо'],
+    direction: 'positive',
+    ...overrides,
+  })
 }

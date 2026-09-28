@@ -45,6 +45,11 @@ def request_variables(start: date, end: date, keys: tuple[str, str]) -> tuple[Va
 
     Candidate habit identities only instantiate 7A metadata. Their actual
     presence is checked against the loaded dataset's registry in analyze().
+
+    Every candidate is offered as a value habit as well, because this step only
+    resolves the *grain* of a requested key and has no way to know which habits
+    answer on a scale — that question belongs to the loaded dataset, which is
+    where a scale key for a habit without a scale is rejected.
     """
     validate_request(start, end, keys, pair=True)
     ids = set()
@@ -52,7 +57,7 @@ def request_variables(start: date, end: date, keys: tuple[str, str]) -> tuple[Va
         parts = key.split(".")
         if len(parts) == 4 and parts[0] == "habit" and parts[1].isascii() and parts[1].isdigit():
             ids.add(int(parts[1]))
-    known = {v.key: v for v in registry(tuple(ids))}
+    known = {v.key: v for v in registry(tuple(ids), tuple(ids))}
     unknown = sorted(set(keys) - known.keys())
     if unknown:
         raise ValueError("Неизвестные переменные аналитики: " + ", ".join(unknown))

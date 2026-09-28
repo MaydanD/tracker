@@ -1,4 +1,4 @@
-# Installs (if needed) and starts the Vite development server.
+﻿# Starts the Vite development server after the one-time setup.
 # Usage (from the repository root):  powershell -File scripts\dev-frontend.ps1
 
 $ErrorActionPreference = 'Stop'
@@ -9,11 +9,11 @@ $frontend = Join-Path $repoRoot 'frontend'
 Push-Location $frontend
 try {
     if (-not (Test-Path (Join-Path $frontend 'node_modules'))) {
-        Write-Host 'Installing frontend dependencies'
-        npm install
+        throw 'Среда не подготовлена. Сначала выполните npm ci в папке frontend.'
     }
 
-    npm run dev
+    npm.cmd run dev -- --host 127.0.0.1
+    if ($LASTEXITCODE -ne 0) { throw 'Интерфейс Tracker завершился с ошибкой.' }
 }
 finally {
     Pop-Location

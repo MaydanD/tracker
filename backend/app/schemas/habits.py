@@ -13,13 +13,20 @@ schemas describe shape only, so the rules exist in exactly one place.
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Annotated
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.db.models import Habit, HabitVersion
-from app.domain.habits import NAME_MAX_LENGTH, HabitConfig
+from app.domain.habits import NAME_MAX_LENGTH, HabitConfig, Importance
 from app.domain.schedule import Schedule, ScheduleType
-from app.domain.tracking import QUANTITY_UNIT_MAX_LENGTH, TrackingMode
+from app.domain.tracking import (
+    QUANTITY_UNIT_MAX_LENGTH,
+    VALUE_LABEL_MAX_LENGTH,
+    Direction,
+    TrackingMode,
+    ValueType,
+)
 from app.schemas.areas import AreaSummary
 
 
@@ -85,16 +92,20 @@ class VersionSummary(BaseModel):
 
 
 def config_fields(version: HabitVersion) -> dict[str, object]:
-    """Shared configuration fields for habit and version responses."""
+    """Shared historical configuration fields."""
     return {
         "name": version.name,
         "description": version.description,
         "area_id": version.area_id,
         "area": AreaSummary.from_model(version.area),
+        "importance": version.importance_enum,
         "weight": version.weight,
         "tracking_mode": TrackingMode(version.tracking_mode),
         "quantity_unit": version.quantity_unit,
         "quantity_allows_decimal": version.quantity_allows_decimal,
+        "value_type": version.value_type_enum,
+        "value_labels": None if version.value_labels is None else list(version.value_labels),
+        "direction": version.direction_enum,
         "schedule": ScheduleRead.from_domain(version.schedule),
     }
 
@@ -105,7 +116,8 @@ class HabitConfigInput(BaseModel):
     name: str = Field(min_length=1, max_length=NAME_MAX_LENGTH)
     description: str | None = None
     area_id: int = Field(gt=0)
-    weight: int = Field(description="1 = normal, 2 = important, 3 = key.")
+    importance: Importance = Field(default=Importance.NORMAL, description="Independent versioned metadata; not a score coefficient.")
+    weight: int = Field(default=1, description="1 = normal, 2 = important, 3 = key.")
     tracking_mode: TrackingMode
     quantity_unit: str | None = Field(
         default=None,
@@ -113,6 +125,27 @@ class HabitConfigInput(BaseModel):
         description="Required when tracking_mode is binary_quantity.",
     )
     quantity_allows_decimal: bool = False
+    value_type: ValueType | None = Field(
+        default=None,
+        description=(
+            "How the day is answered: null for completion (done/missed/skipped), "
+            "otherwise `binary` (0/1) or `ordinal_4` (0–3)."
+        ),
+    )
+    value_labels: list[Annotated[str, Field(max_length=VALUE_LABEL_MAX_LENGTH)]] | None = Field(
+        default=None,
+        description=(
+            "One label per value of the scale, in the user's own words. "
+            "Required for `ordinal_4`; `binary` defaults to нет/да."
+        ),
+    )
+    direction: Direction | None = Field(
+        default=None,
+        description=(
+            "Whether a higher value is better (positive), worse (negative) or "
+            "neither (neutral). Analytic metadata, not importance."
+        ),
+    )
     schedule: ScheduleInput
 
     def to_domain(self) -> HabitConfig:
@@ -121,10 +154,14 @@ class HabitConfigInput(BaseModel):
             description=self.description,
             area_id=self.area_id,
             weight=self.weight,
+            importance=self.importance,
             tracking_mode=self.tracking_mode,
             quantity_unit=self.quantity_unit,
             quantity_allows_decimal=self.quantity_allows_decimal,
             schedule=self.schedule.to_domain(),
+            value_type=self.value_type,
+            value_labels=self.value_labels,
+            direction=self.direction,
         )
 
 
@@ -147,10 +184,16 @@ class HabitConfigRead(BaseModel):
     description: str | None
     area_id: int
     area: AreaSummary
+    #: Importance: `low`, `normal` or `high`.
+    importance: Importance
+    #: Historical score coefficient, independent of importance.
     weight: int
     tracking_mode: TrackingMode
     quantity_unit: str | None
     quantity_allows_decimal: bool
+    value_type: ValueType | None
+    value_labels: list[str] | None
+    direction: Direction | None
     schedule: ScheduleRead
 
     @classmethod
@@ -181,6 +224,8 @@ class HabitRead(HabitConfigRead):
     """A habit with its current configuration."""
 
     id: int
+    #: Stable machine key of a shipped habit; null for a habit created by hand.
+    key: str | None
     is_archived: bool
     archived_at: datetime | None
     created_at: datetime
@@ -192,6 +237,7 @@ class HabitRead(HabitConfigRead):
         version = habit.current_version
         return cls(
             id=habit.id,
+            key=habit.key,
             is_archived=habit.is_archived,
             archived_at=habit.archived_at,
             created_at=habit.created_at,

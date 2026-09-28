@@ -94,6 +94,13 @@ class InvalidWeightError(InvalidConfigurationError):
     message = "Habit weight must be 1 (normal), 2 (important) or 3 (key)."
 
 
+class InvalidImportanceError(InvalidConfigurationError):
+    """Importance must be ``low``, ``normal`` or ``high``."""
+
+    code = "invalid_importance"
+    message = "Habit importance must be low, normal or high."
+
+
 class InvalidTrackingModeError(InvalidConfigurationError):
     code = "invalid_tracking_mode"
     message = "Unknown habit tracking mode."
@@ -102,6 +109,15 @@ class InvalidTrackingModeError(InvalidConfigurationError):
 class InvalidQuantityUnitError(InvalidConfigurationError):
     code = "invalid_quantity_unit"
     message = "A quantity unit is required for habits that track quantities."
+
+
+class IncompatibleTrackingError(InvalidConfigurationError):
+    """A quantity and a value scale were requested for the same habit."""
+
+    code = "incompatible_tracking"
+    message = (
+        "A habit cannot track a quantity and a value scale at the same time."
+    )
 
 
 class InvalidScheduleError(InvalidConfigurationError):
@@ -199,6 +215,47 @@ class InsightNotFoundError(NotFoundError):
 
     code = "insight_not_found"
     message = "That insight does not exist."
+
+
+# -- habit value scales ------------------------------------------------------
+#
+# A habit is answered either as completion (done / missed / skipped) or as a
+# value on a small scale. These errors describe the value side only; the
+# completion side keeps the errors above.
+
+
+class InvalidValueTypeError(InvalidConfigurationError):
+    code = "invalid_value_type"
+    message = "Unknown habit value type."
+
+
+class InvalidDirectionError(InvalidConfigurationError):
+    code = "invalid_direction"
+    message = "Unknown habit direction."
+
+
+class InvalidValueLabelsError(InvalidConfigurationError):
+    code = "invalid_value_labels"
+    message = "A value scale needs exactly one label per value."
+
+
+class InvalidHabitValueError(InvalidConfigurationError):
+    code = "invalid_habit_value"
+    message = "The habit value is not valid for its scale."
+
+
+class ValueNotAllowedError(InvalidConfigurationError):
+    """A value was submitted for a habit that tracks completion instead."""
+
+    code = "value_not_allowed"
+    message = "This habit does not track a value."
+
+
+class ValueRequiredError(InvalidConfigurationError):
+    """A value-tracked habit cannot be recorded without an answer."""
+
+    code = "value_required"
+    message = "This habit needs a value (0 is a valid answer)."
 
 
 # -- experiments (Stage 10) -------------------------------------------------

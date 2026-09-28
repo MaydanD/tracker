@@ -47,7 +47,7 @@ class LongestStreakRead(BaseModel):
 class BestDayRead(BaseModel):
     day: date
     score: float
-    completed_weight: int
+    completed_weight: float
     required_weight: int
     ties: int
 

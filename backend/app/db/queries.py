@@ -37,6 +37,16 @@ def active_habits_in_area(session: Session, area_id: int) -> list[Habit]:
     ]
 
 
+def order_key(*, sort_order: int, name: str) -> tuple[bool, int, str]:
+    """Position of a record in the user's ordering.
+
+    Records with a position of their own (the shipped areas and habits) come
+    first, in that order; everything else keeps the alphabetical ordering the
+    interface has always used, after them.
+    """
+    return (sort_order == 0, sort_order, name.casefold())
+
+
 def effective_version(
     versions: Sequence[HabitVersion], on: date
 ) -> HabitVersion | None:

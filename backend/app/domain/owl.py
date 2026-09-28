@@ -125,7 +125,7 @@ class DashboardContext:
     today: date
     after_hours: bool
     required_weight: int
-    completed_weight: int
+    completed_weight: float
     unmarked_obligations: int
     obligation_count: int
     failed_important: tuple[str, ...]

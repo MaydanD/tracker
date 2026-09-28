@@ -1,8 +1,10 @@
+import { useEffect } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import { OwlLogo } from '../components/owl/OwlLogo'
 import { useTodayLabel } from '../hooks/useTodayLabel'
 import { NAVIGATION_ITEMS } from '../navigation'
+import { telegramAction } from '../api/backup'
 
 /**
  * Application frame: a single compact navigation bar that carries the brand and
@@ -14,6 +16,12 @@ import { NAVIGATION_ITEMS } from '../navigation'
 export function AppShell() {
   const location = useLocation()
   const today = useTodayLabel()
+  useEffect(() => {
+    const check = () => { void telegramAction('auto').catch(() => { /* Settings shows persisted errors. */ }) }
+    check()
+    window.addEventListener('focus', check)
+    return () => window.removeEventListener('focus', check)
+  }, [today])
   // Exact route first, then the longest parent section: a detail page such as
   // `/experiments/3` still belongs to the «Эксперименты» section.
   const current =

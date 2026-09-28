@@ -7,13 +7,20 @@ from starlette.concurrency import run_in_threadpool
 from app.api.dependencies import ClockDep, DatabaseDep, SettingsDep
 from app.domain.backup import BackupError
 from app.schemas.backup import BackupPreview
-from app.services import backup
+from app.services import backup, backup_settings
 
 router = APIRouter(tags=["data"])
 ZIP_BODY = {"requestBody": {"required": True, "content": {
     "application/zip": {"schema": {"type": "string", "format": "binary"}},
 }}}
 ZIP_RESPONSE = {200: {"content": {"application/zip": {"schema": {"type": "string", "format": "binary"}}}}}
+
+
+def local_action(request, settings):
+    """CORS alone does not block cross-site simple POSTs to localhost."""
+    origin = request.headers.get("origin")
+    if request.headers.get("sec-fetch-site") == "cross-site" or (origin and origin not in settings.cors_origins):
+        raise BackupError("Откройте настройки в локальном приложении Tracker.", status_code=403)
 
 
 def download(raw: bytes, filename: str, media_type: str):
@@ -27,7 +34,45 @@ def download(raw: bytes, filename: str, media_type: str):
 def get_backup(database: DatabaseDep, clock: ClockDep):
     moment = clock.now().astimezone(UTC)
     raw = backup.make_archive(backup.read_snapshot(database), moment)
+    backup_settings.record_download(database, clock)
     return download(raw, f"tracker-backup-{moment.strftime('%Y-%m-%dT%H%M%S')}.zip", "application/zip")
+
+
+@router.get("/backup/settings")
+def get_backup_settings(database: DatabaseDep, settings: SettingsDep, clock: ClockDep, response: Response):
+    response.headers["Cache-Control"] = "no-store"
+    return backup_settings.status(database, settings, clock)
+
+
+@router.put("/backup/settings")
+async def save_backup_settings(request: Request, database: DatabaseDep, settings: SettingsDep, clock: ClockDep):
+    local_action(request, settings)
+    try:
+        payload = await request.json()
+    except Exception:
+        raise BackupError("Некорректные настройки Telegram.") from None
+    return await run_in_threadpool(backup_settings.save, database, settings, clock, payload)
+
+
+@router.post("/backup/telegram/check")
+def check_telegram(request: Request, database: DatabaseDep, settings: SettingsDep, clock: ClockDep):
+    local_action(request, settings)
+    backup_settings.perform(database, settings, clock, check_only=True)
+    return backup_settings.status(database, settings, clock)
+
+
+@router.post("/backup/telegram/send")
+def send_telegram(request: Request, database: DatabaseDep, settings: SettingsDep, clock: ClockDep):
+    local_action(request, settings)
+    backup_settings.perform(database, settings, clock)
+    return backup_settings.status(database, settings, clock)
+
+
+@router.post("/backup/auto")
+def automatic_backup(request: Request, database: DatabaseDep, settings: SettingsDep, clock: ClockDep):
+    local_action(request, settings)
+    backup_settings.try_automatic(database, settings, clock)
+    return backup_settings.status(database, settings, clock)
 
 
 @router.get("/export/json", response_class=Response, responses={200: {"content": {"application/json": {}}}})
@@ -83,5 +128,5 @@ async def restore(request: Request, settings: SettingsDep, database: DatabaseDep
     backup.check_token(raw, request.headers.get("x-tracker-validation-token", ""), request.app.state.backup_signing_key)
     _, data = await run_in_threadpool(backup.validate_archive, raw, settings)
     safety = await run_in_threadpool(backup.restore, database, data, settings, clock.now().astimezone(UTC))
-    return {"status": "restored", "counts": {name: len(getattr(data, name)) for name in backup.TABLES},
+    return {"status": "restored", "counts": {name: len(getattr(data, name, [])) for name in backup.TABLES},
             "safety_backup": safety}

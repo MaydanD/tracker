@@ -23,7 +23,7 @@ async function transfer(path: string, init?: RequestInit): Promise<Response> {
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { error?: { code?: string; message?: string } } | null
     const error = body?.error
-    throw new Error(error?.code && ['invalid_backup', 'restore_failed'].includes(error.code)
+    throw new Error(error?.code && ['invalid_backup', 'restore_failed', 'telegram_error'].includes(error.code)
       ? error.message : 'Не удалось выполнить операцию с данными. Попробуйте ещё раз.')
   }
   return response
@@ -40,6 +40,7 @@ export async function downloadData(kind: 'backup' | 'json' | 'csv'): Promise<voi
   document.body.append(anchor)
   anchor.click()
   anchor.remove()
+  if (kind === 'backup') window.dispatchEvent(new Event('tracker:backup-updated'))
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
@@ -64,4 +65,39 @@ export async function restoreBackup(file: File, token: string): Promise<void> {
 export function reloadAfterRestore(): void {
   try { sessionStorage.setItem('tracker:restore-success', '1') } catch { /* storage may be unavailable */ }
   window.location.reload()
+}
+
+export interface BackupStatus {
+  last_successful_backup_at: string | null
+  last_backup_kind: 'download' | 'telegram' | 'auto-telegram' | null
+  last_telegram_backup_at: string | null
+  chat_id: string
+  auto_enabled: boolean
+  connected: boolean
+  last_error: string | null
+  next_auto_attempt_at: string | null
+  token_saved: boolean
+  configured: boolean
+  /** ISO timestamp of the last successful check or send for the current credentials. */
+  telegram_verified_at: string | null
+  /** true when configured AND telegram_verified_at is set — survives page reload. */
+  verified: boolean
+  reminder_due: boolean
+  in_progress: boolean
+}
+
+export async function fetchBackupStatus(): Promise<BackupStatus> {
+  return (await transfer('/api/backup/settings')).json() as Promise<BackupStatus>
+}
+
+export async function updateBackupSettings(settings: { token?: string; chat_id: string; auto_enabled: boolean }): Promise<BackupStatus> {
+  return (await transfer('/api/backup/settings', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings),
+  })).json() as Promise<BackupStatus>
+}
+
+export async function telegramAction(action: 'check' | 'send' | 'auto'): Promise<BackupStatus> {
+  const response = await transfer(action === 'auto' ? '/api/backup/auto' : `/api/backup/telegram/${action}`, { method: 'POST' })
+  window.dispatchEvent(new Event('tracker:backup-updated'))
+  return response.json() as Promise<BackupStatus>
 }

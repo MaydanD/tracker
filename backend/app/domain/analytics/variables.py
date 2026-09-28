@@ -21,6 +21,7 @@ DAILY_HABIT_FIELDS = (
     ("status", "Отметка", T.CATEGORICAL),
     ("completion", "Выполнено по явной отметке", T.BOOLEAN),
     ("quantity", "Количество", T.NUMERIC),
+    ("value", "Значение шкалы", T.ORDINAL),
     ("weight", "Вес", T.NUMERIC),
     ("required_weight", "Обязательный дневной вес", T.NUMERIC),
 )
@@ -38,7 +39,7 @@ def habit_key(habit_id: int, grain: Grain, feature: str) -> str:
     return f"habit.{habit_id}.{grain.value}.{feature}"
 
 
-def registry(habit_ids: tuple[int, ...]) -> tuple[Variable, ...]:
+def registry(habit_ids: tuple[int, ...], value_habit_ids: tuple[int, ...] = ()) -> tuple[Variable, ...]:
     result: list[Variable] = []
 
     def add(key, label, kind, grain, source, missing, **kwargs):
@@ -96,6 +97,8 @@ def registry(habit_ids: tuple[int, ...]) -> tuple[Variable, ...]:
     for habit_id in sorted(habit_ids):
         for grain, fields in ((Grain.DAILY, DAILY_HABIT_FIELDS), (Grain.WEEKLY, WEEKLY_HABIT_FIELDS)):
             for name, label, kind in fields:
+                if name == "value" and habit_id not in value_habit_ids:
+                    continue
                 add(habit_key(habit_id, grain, name), f"Привычка №{habit_id}: {label}", kind,
                     grain, "daily_habit_entries + effective habit_versions" if grain == Grain.DAILY
                     else "stage4.week_progress (полная календарная неделя)",
@@ -104,5 +107,7 @@ def registry(habit_ids: tuple[int, ...]) -> tuple[Variable, ...]:
                     "completion: done=true, missed/skipped=false; нет отметки не означает false. "
                     "Вес и квота — план. Единица количества берётся из конфигурации даты.",
                     habit_id=habit_id,
-                    categories=("done", "missed", "skipped") if name == "status" else ())
+                    categories=("done", "missed", "skipped") if name == "status" else (),
+                    minimum=0 if name == "value" else None,
+                    maximum=3 if name == "value" else None)
     return tuple(result)

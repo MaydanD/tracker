@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 import secrets
+import asyncio
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +28,8 @@ from app.core.time import SYSTEM_CLOCK, Clock
 from app.db.backup import run_startup_backup
 from app.db.database import Database, create_database
 from app.db.migrations import applied_revision, expected_revision, schema_status
+from app.services.backup_settings import try_automatic
+from app.services.canonical import reconcile_canonical
 
 logger = get_logger(__name__)
 
@@ -55,6 +58,43 @@ def log_schema_state(database: Database) -> None:
         )
     else:
         logger.info("Database schema state not checked (migration files unavailable)")
+
+
+def reconcile_canonical_habits(database: Database, *, clock: Clock) -> None:
+    """Create the shipped habit set and retire what predates it.
+
+    Idempotent and safe on both a fresh and an existing database: it creates the
+    four spheres and the 24 habits through the ordinary area/habit services when
+    they are missing, archives habit content that predates the shipped set (kept
+    in full for history), and changes nothing else. A missing table (schema not
+    migrated yet) is logged, not raised, so the app still starts and
+    ``/api/ready`` can explain the real problem.
+    """
+    try:
+        with database.session() as session:
+            summary = reconcile_canonical(session, today=clock.today())
+    except SQLAlchemyError:
+        logger.warning("Could not reconcile the shipped habits", exc_info=True)
+        return
+
+    if summary.areas_created or summary.habits_created:
+        logger.info(
+            "Canonical habits reconciled (%s areas, %s habits created)",
+            summary.areas_created,
+            summary.habits_created,
+        )
+    if summary.legacy_habits_archived or summary.legacy_areas_archived:
+        logger.info(
+            "Retired pre-canonical habit content (%s habits, %s areas archived, "
+            "history kept)",
+            summary.legacy_habits_archived,
+            summary.legacy_areas_archived,
+        )
+    if summary.parked_entries_adopted:
+        logger.info(
+            "Adopted %s recorded answers from the previous value-scale tables",
+            summary.parked_entries_adopted,
+        )
 
 
 def create_app(settings: Settings | None = None, *, clock: Clock | None = None) -> FastAPI:
@@ -88,9 +128,17 @@ def create_app(settings: Settings | None = None, *, clock: Clock | None = None) 
         # database that does not exist yet, and never raises.
         run_startup_backup(app.state.database, settings, clock=app.state.clock)
         log_schema_state(app.state.database)
+        # The user must never create the shipped habits by hand: reconcile the
+        # exact 24-habit set on every start, idempotently. Skipped under test,
+        # where every database is a fixture that states its own habits.
+        if settings.app_env != "test":
+            reconcile_canonical_habits(app.state.database, clock=app.state.clock)
+        auto_backup = asyncio.create_task(asyncio.to_thread(
+            try_automatic, app.state.database, settings, app.state.clock))
         try:
             yield
         finally:
+            await auto_backup
             app.state.database.dispose()
             logger.info("%s backend stopped", settings.app_name)
 

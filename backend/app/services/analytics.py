@@ -38,7 +38,7 @@ def _load_dataset(session: Session, start: date, end: date, *, today: date) -> D
     entries_by_habit: dict[int, dict[date, EntrySource]] = {}
     for entry in entries:
         entries_by_habit.setdefault(entry.habit_id, {})[entry.entry_date] = EntrySource(
-            entry.status, entry.quantity_value_micro, entry.skip_reason, entry.note)
+            entry.status, entry.quantity_value_micro, entry.skip_reason, entry.note, entry.value)
     inputs = []
     for habit, history in zip(habits, histories, strict=True):
         # Include the union of applicable habits and recorded sources across full

@@ -21,22 +21,33 @@ from sqlalchemy import select, text
 from app.core.errors import AppError
 from app.core.logging import get_logger
 from app.db.migrations import expected_revision
-from app.db.models import Area, Habit, HabitVersion, DailyHabitEntry, DailyState, Experiment, InsightSnapshot
+from app.db.models import (Area, Habit, HabitVersion, DailyHabitEntry, DailyState, Experiment,
+                           InsightSnapshot)
 from app.domain.backup import BackupError, require, validate_relations
-from app.schemas.backup import BackupDataV1, ManifestV1
+from app.schemas.backup import BackupDataV1, BackupDataV2, ManifestV1, ManifestV2
 
 logger = get_logger(__name__)
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
+# A v1 archive was produced by code at this revision: habits could only be
+# answered as completion, so it has no value scale columns.
 V1_REVISION = "c3f1a7b24d90"
+# A v2 archive carries the value scale of every habit version and the recorded
+# answer of every entry. The format is unchanged since the value scales landed,
+# so every revision from there on writes and reads the same archive.
+V2_REVISION = "3f8a5c1d72be"
+V2_REVISIONS = (V2_REVISION, "9e2c7b4a610f", "5824a510506e")
 TOKEN_TTL = 1800
 # Explicit allowlist: infrastructure tables and future secret-bearing tables
-# cannot accidentally join a backup. Columns are pinned by the v1 DTO below.
+# cannot accidentally join a backup. Columns are pinned by the current DTO below.
+# Insert order satisfies foreign keys; deletion walks the reverse.
 TABLES = {
     "areas": Area.__table__, "habits": Habit.__table__,
     "habit_versions": HabitVersion.__table__, "habit_entries": DailyHabitEntry.__table__,
     "daily_states": DailyState.__table__, "experiments": Experiment.__table__,
     "insight_snapshots": InsightSnapshot.__table__,
 }
+#: The DTO the current format is written from and validated against.
+CURRENT_DATA = BackupDataV2
 
 
 def json_bytes(value) -> bytes:
@@ -48,10 +59,10 @@ def json_bytes(value) -> bytes:
 
 
 def snapshot(session) -> dict:
-    """Seven ordered Core selects: no ORM eager loads and no N+1."""
+    """One ordered Core select per table: no ORM eager loads and no N+1."""
     result = {}
     for name, table in TABLES.items():
-        row_type = BackupDataV1.model_fields[name].annotation.__args__[0]
+        row_type = CURRENT_DATA.model_fields[name].annotation.__args__[0]
         columns = [table.c[field] for field in row_type.model_fields]
         result[name] = [dict(row) for row in session.execute(
             select(*columns).order_by(table.c.id)).mappings()]
@@ -73,6 +84,7 @@ def make_archive(data: dict, moment: datetime) -> bytes:
         "application_backup_version": FORMAT_VERSION,
         "counts": {name: len(rows) for name, rows in data.items()},
     }
+    ManifestV2(**manifest)  # The manifest and the DTO must always agree.
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("manifest.json", json_bytes(manifest))
@@ -94,21 +106,66 @@ def _json(raw):
     return json.loads(raw.decode("utf-8"), object_pairs_hook=_object, parse_constant=bad_constant)
 
 
+def _counts(data) -> dict:
+    return {name: len(getattr(data, name, [])) for name in TABLES}
+
+
 def normalize_v1(manifest: dict, data_raw: bytes):
-    """v1 → current DTO. Future versions get their own normalizer here."""
+    """v1 → its own frozen DTO, then lifted to the current one.
+
+    Validating against the frozen v1 DTO is what makes an old archive readable
+    forever; lifting it afterwards lets restore stay a single code path, with the
+    columns v1 predates filled in with their safe defaults.
+    """
     require(manifest.get("alembic_revision") == V1_REVISION, "Неподдерживаемая схема резервной копии.")
     require(type(manifest.get("application_backup_version")) is int,
             "Некорректная версия приложения резервного копирования.")
     parsed_manifest = ManifestV1.model_validate_json(json_bytes(manifest))
     _json(data_raw)  # Reject duplicate keys and nonstandard numeric constants.
     data = BackupDataV1.model_validate_json(data_raw)
-    require(parsed_manifest.counts == {name: len(getattr(data, name)) for name in TABLES},
+    require(parsed_manifest.counts == {name: len(getattr(data, name, [])) for name in TABLES},
+            "Количество записей не совпадает с манифестом.")
+    validate_relations(data)
+    return parsed_manifest, lift_v1(data)
+
+
+def lift_v1(data: BackupDataV1) -> BackupDataV2:
+    """Fill the columns v1 predates, so restore has one code path.
+
+    A v1 archive knows nothing about keys, display order, value scales or
+    recorded answers, so those become ``None`` / ``0`` — exactly what the database
+    would have held for that old code.
+    """
+    def rows(section: str, **defaults):
+        return [{**row.model_dump(), **defaults} for row in getattr(data, section)]
+
+    return BackupDataV2.model_validate({
+        "areas": rows("areas", key=None, sort_order=0),
+        "habits": rows("habits", key=None, sort_order=0),
+        "habit_versions": rows("habit_versions", value_type=None,
+                               value_labels=None, direction=None),
+        "habit_entries": rows("habit_entries", value=None),
+        "daily_states": rows("daily_states"),
+        "experiments": rows("experiments"),
+        "insight_snapshots": rows("insight_snapshots"),
+    })
+
+
+def normalize_v2(manifest: dict, data_raw: bytes):
+    """v2 → the current DTO, including the value scale columns."""
+    require(manifest.get("alembic_revision") in V2_REVISIONS, "Неподдерживаемая схема резервной копии.")
+    require(type(manifest.get("application_backup_version")) is int,
+            "Некорректная версия приложения резервного копирования.")
+    parsed_manifest = ManifestV2.model_validate_json(json_bytes(manifest))
+    _json(data_raw)  # Reject duplicate keys and nonstandard numeric constants.
+    data = BackupDataV2.model_validate_json(data_raw)
+    require(parsed_manifest.counts == _counts(data),
             "Количество записей не совпадает с манифестом.")
     validate_relations(data)
     return parsed_manifest, data
 
 
-NORMALIZERS = {1: normalize_v1}
+NORMALIZERS = {1: normalize_v1, 2: normalize_v2}
 
 
 def validate_archive(raw: bytes, settings):
@@ -238,7 +295,9 @@ def restore(database, data: BackupDataV1, settings, moment: datetime) -> str:
             for table in reversed(list(TABLES.values())):
                 session.execute(table.delete())
             for section, table in TABLES.items():
-                rows = getattr(data, section)
+                # Both formats are lifted to the current DTO before this point, so
+                # every column of every row is present.
+                rows = getattr(data, section, [])
                 for offset in range(0, len(rows), 1000):
                     session.execute(table.insert(), [row.model_dump() for row in rows[offset:offset + 1000]])
             session.commit()
@@ -267,7 +326,7 @@ def csv_archive(data: dict) -> bytes:
         return value
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, rows in data.items():
-            row_type = BackupDataV1.model_fields[name].annotation.__args__[0]
+            row_type = CURRENT_DATA.model_fields[name].annotation.__args__[0]
             fields = list(row_type.model_fields)
             stream = io.StringIO(newline="")
             writer = csv.writer(stream)

@@ -61,6 +61,26 @@ export interface AreaUpdateInput {
 
 export type TrackingMode = 'binary' | 'binary_quantity'
 
+/** How a day is answered: a scale of two values (0/1) or of four (0–3). */
+export type ValueType = 'binary' | 'ordinal_4'
+
+/**
+ * Which end of a value scale is good.
+ *
+ * `positive` — more is better (Прогулка, Чтение); `negative` — more is worse
+ * (Симптомы, Игры, Алкоголь); `neutral` — no evaluative meaning at all (Секс,
+ * Работа, Кофе). Analytic metadata: it says which end of the scale is good, not
+ * how much the habit matters.
+ */
+export type Direction = 'positive' | 'negative' | 'neutral'
+
+/**
+ * How much a habit matters to the user: `low`, `normal` or `high`.
+ *
+ * Independent versioned metadata; defaults to normal and does not affect score.
+ */
+export type Importance = 'low' | 'normal' | 'high'
+
 export type ScheduleType = 'daily' | 'weekdays' | 'times_per_week'
 
 /** Weekdays are ISO numbers: 0 = Monday … 6 = Sunday. */
@@ -89,10 +109,19 @@ export interface HabitConfig {
   description: string | null
   area_id: number
   area: AreaSummary
+  /** How much the habit matters: `low`, `normal` or `high`. */
+  importance: Importance
+  /** Historical score coefficient (1 ordinary, 2 important, 3 key). */
   weight: number
   tracking_mode: TrackingMode
   quantity_unit: string | null
   quantity_allows_decimal: boolean
+  /** `null` for a completion habit; otherwise the scale it is answered on. */
+  value_type: ValueType | null
+  /** One label per value of the scale, in the user's own words. */
+  value_labels: string[] | null
+  /** Which end of the scale is good; `null` for a completion habit. */
+  direction: Direction | null
   schedule: ScheduleRead
 }
 
@@ -105,6 +134,8 @@ export interface VersionSummary {
 
 export interface Habit extends HabitConfig {
   id: number
+  /** Stable machine key of a shipped habit; `null` for one created by hand. */
+  key: string | null
   is_archived: boolean
   archived_at: string | null
   created_at: string
@@ -137,6 +168,11 @@ export interface DailyEntry {
   habit_id: number
   entry_date: string
   status: EntryStatus
+  /**
+   * Answer of a value-tracked habit, `null` for a completion habit.
+   * A recorded `0` is a real answer, never "nothing recorded".
+   */
+  value: number | null
   /** Exact stored value; null when no quantity was recorded. */
   quantity_value: number | null
   /** Unit of the configuration effective on `entry_date` (derived, not stored). */
@@ -150,6 +186,8 @@ export interface DailyEntry {
 /** Body for saving an entry. Saving is a replace: omitted fields are cleared. */
 export interface DailyEntryInput {
   status: EntryStatus
+  /** Required for a value-tracked habit; rejected for a completion habit. */
+  value?: number | null
   quantity_value?: number | null
   skip_reason?: string | null
   note?: string | null
@@ -160,10 +198,16 @@ export interface DayItem {
   habit_id: number
   name: string
   area: AreaSummary
+  importance: Importance
   weight: number
   tracking_mode: TrackingMode
   quantity_unit: string | null
   quantity_allows_decimal: boolean
+  /** `null` for a completion habit; otherwise the scale it is answered on. */
+  value_type: ValueType | null
+  value_labels: string[] | null
+  /** Which end of the scale is good; `null` for a completion habit. */
+  direction: Direction | null
   schedule: ScheduleRead
   is_archived: boolean
   /** `null` means "нет отметки" — it is not the same as `missed`. */
@@ -179,15 +223,23 @@ export interface DayState {
   items: DayItem[]
 }
 
-/** Full configuration payload for creating or replacing a habit. */
+/**
+ * Full configuration payload for creating or replacing a habit.
+ *
+ * Importance and weight are independent configuration fields.
+ */
 export interface HabitInput {
   name: string
   description?: string | null
   area_id: number
-  weight: number
+  importance?: Importance
+  weight?: number
   tracking_mode: TrackingMode
   quantity_unit?: string | null
   quantity_allows_decimal?: boolean
+  value_type?: ValueType | null
+  value_labels?: string[] | null
+  direction?: Direction | null
   schedule: ScheduleInput
 }
 export interface Score {
@@ -221,6 +273,9 @@ export interface HabitStreak {
 export interface ProgressState {
   today: string
   day: Score & {
+    filled_count?: number
+    total_count?: number
+    completion?: number | null
     entry_date: string
     obligations: { habit_id: number; name: string; weight: number; entry_status: EntryStatus | null; satisfied: boolean }[]
   }

@@ -21,7 +21,11 @@ STAGE_2_REVISION = "8c12a1c62d83"
 STAGE_3_REVISION = "fc1efb50fa8d"
 STAGE_5_REVISION = "d5a1c09e2401"
 STAGE_8_REVISION = "b2631e796164"
+#: Habits still only answered as completion (Stage 10).
 STAGE_10_REVISION = "c3f1a7b24d90"
+#: Head: habits that can be answered with a value, carry an importance and a
+#: stable machine key, and hold the ordinary score weight a fresh install uses.
+HEAD_REVISION = "3f8a5c1d72be"
 
 
 @dataclass(frozen=True)

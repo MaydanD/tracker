@@ -270,7 +270,9 @@ def discover_variables(dataset: AnalyticsDataset, *, habit_ids: Sequence[int],
     if seats["score"] > 0 and policy.score_variable in available:
         selected.append(policy.score_variable)
     states = [key for key in policy.state_priority if key in available][:seats["state"]]
-    habits = [habit_key(habit_id, policy.discovery_grain, policy.habit_feature)
+    habits = [habit_key(habit_id, policy.discovery_grain,
+                       "value" if habit_key(habit_id, policy.discovery_grain, "value") in available
+                       else policy.habit_feature)
               for habit_id in habit_ids]
     habits = [key for key in habits if key in available][:seats["habit"]]
     selected.extend(states)

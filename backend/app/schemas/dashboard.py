@@ -42,12 +42,15 @@ class CalendarHabitScoreRead(ReadModel):
     area_name: str
     color: str
     score: float
+    value: int | None = None
+    value_type: str | None = None
+    direction: str | None = None
 
 
 class CalendarDaySummaryRead(ReadModel):
     entry_date: date
     daily_score: float | None
-    completed_weight: int
+    completed_weight: float
     required_weight: int
     has_obligations: bool
     has_daily_state: bool

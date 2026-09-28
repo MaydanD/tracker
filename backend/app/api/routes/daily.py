@@ -75,7 +75,8 @@ def read_entry(
     summary="Create or replace a habit's entry for a date",
     description=(
         "Idempotent: the entry for (habit, date) is replaced, never duplicated. "
-        "A future date only accepts `skipped` with a reason."
+        "A future date only accepts `skipped` with a reason; a habit tracked on a "
+        "value scale is recorded with `value` (0 is a real answer)."
     ),
 )
 def save_entry(
@@ -92,6 +93,7 @@ def save_entry(
         status=payload.status,
         today=clock.today(),
         quantity_value=payload.quantity_value,
+        value=payload.value,
         skip_reason=payload.skip_reason,
         note=payload.note,
     )

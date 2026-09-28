@@ -9,9 +9,9 @@ from app.core.config import Settings
 from app.db.database import Database, create_database, create_db_engine
 from app.db.migrations import applied_revision, expected_revision, schema_status
 from tests.helpers import (
+    HEAD_REVISION,
     STAGE_1_REVISION,
     STAGE_2_REVISION,
-    STAGE_10_REVISION,
     alembic_config,
     run_migrations,
     table_names,
@@ -21,6 +21,32 @@ STAGE_1_TABLES = {"app_metadata", "alembic_version"}
 STAGE_2_TABLES = {"areas", "habits", "habit_versions"}
 STAGE_3_TABLES = {"daily_habit_entries"}
 STAGE_10_TABLES = {"experiments"}
+#: Tables of the uncommitted value-scale prototype: a database that used them is
+#: migrated by parking its answers and dropping them, so none may remain.
+RETIRED_TABLES = {
+    "indicator_areas",
+    "indicators",
+    "indicator_versions",
+    "daily_indicator_entries",
+}
+
+#: Every check the head schema pins on a habit version.
+HABIT_VERSION_CHECKS = {
+    "ck_habit_versions_weight_range",
+    "ck_habit_versions_importance_values",
+    "ck_habit_versions_tracking_mode_values",
+    "ck_habit_versions_quantity_unit_matches_mode",
+    "ck_habit_versions_schedule_shape",
+    "ck_habit_versions_value_scale_shape",
+    "ck_habit_versions_direction_values",
+}
+
+ENTRY_CHECKS = {
+    "ck_daily_habit_entries_status_values",
+    "ck_daily_habit_entries_skip_reason_matches_status",
+    "ck_daily_habit_entries_quantity_non_negative",
+    "ck_daily_habit_entries_value_range",
+}
 
 
 def _recorded_revision(database_url: str) -> str:
@@ -55,6 +81,15 @@ def _check_constraints(database_url: str, table: str) -> set[str]:
         engine.dispose()
 
 
+def _column_names(database_url: str, table: str) -> set[str]:
+    engine = create_db_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            return {column["name"] for column in inspect(connection).get_columns(table)}
+    finally:
+        engine.dispose()
+
+
 def _prepare(settings: Settings) -> str:
     settings.ensure_directories()
     return settings.resolved_database_url
@@ -70,12 +105,25 @@ class TestFreshDatabase:
         assert STAGE_2_TABLES <= tables
         assert STAGE_3_TABLES <= tables
         assert STAGE_10_TABLES <= tables
+        assert RETIRED_TABLES.isdisjoint(tables)
         assert settings.resolved_database_path.exists()
 
     def test_upgrade_records_the_head_revision(self, settings: Settings) -> None:
         run_migrations(_prepare(settings))
 
-        assert _recorded_revision(settings.resolved_database_url) == STAGE_10_REVISION
+        assert _recorded_revision(settings.resolved_database_url) == HEAD_REVISION
+
+    def test_habits_carry_a_key_and_a_position(self, settings: Settings) -> None:
+        """The shipped-habit key and the display order are part of the schema."""
+        database_url = _prepare(settings)
+        run_migrations(database_url)
+
+        assert {"key", "sort_order"} <= _column_names(database_url, "habits")
+        assert {"key", "sort_order"} <= _column_names(database_url, "areas")
+        # A unique index, not a table constraint: it is added in place, without
+        # rebuilding a table that versions and entries point at.
+        assert "uq_habits_key" in _index_names(database_url, "habits")
+        assert "uq_areas_key" in _index_names(database_url, "areas")
 
     def test_stage_two_schema_has_its_constraints_and_index(
         self, settings: Settings
@@ -86,12 +134,7 @@ class TestFreshDatabase:
         assert _index_names(database_url, "habit_versions") == {
             "ix_habit_versions_area_id"
         }
-        assert _check_constraints(database_url, "habit_versions") == {
-            "ck_habit_versions_weight_range",
-            "ck_habit_versions_tracking_mode_values",
-            "ck_habit_versions_quantity_unit_matches_mode",
-            "ck_habit_versions_schedule_shape",
-        }
+        assert _check_constraints(database_url, "habit_versions") == HABIT_VERSION_CHECKS
 
     def test_stage_three_schema_has_its_constraints_and_index(
         self, settings: Settings
@@ -102,11 +145,7 @@ class TestFreshDatabase:
         assert _index_names(database_url, "daily_habit_entries") == {
             "ix_daily_habit_entries_entry_date"
         }
-        assert _check_constraints(database_url, "daily_habit_entries") == {
-            "ck_daily_habit_entries_status_values",
-            "ck_daily_habit_entries_skip_reason_matches_status",
-            "ck_daily_habit_entries_quantity_non_negative",
-        }
+        assert _check_constraints(database_url, "daily_habit_entries") == ENTRY_CHECKS
 
     def test_the_entry_table_is_unique_per_habit_and_date(
         self, settings: Settings
@@ -150,7 +189,8 @@ class TestUpgradeFromStageOne:
         run_migrations(database_url)
         assert STAGE_2_TABLES <= set(table_names(database_url))
         assert STAGE_3_TABLES <= set(table_names(database_url))
-        assert _recorded_revision(database_url) == STAGE_10_REVISION
+        assert RETIRED_TABLES.isdisjoint(set(table_names(database_url)))
+        assert _recorded_revision(database_url) == HEAD_REVISION
 
     def test_stage_one_data_survives_the_upgrade(self, settings: Settings) -> None:
         """The Stage 1 marker row must still be there after migrating."""
@@ -220,7 +260,8 @@ class TestUpgradeFromStageTwo:
         run_migrations(database_url)
 
         assert STAGE_3_TABLES <= set(table_names(database_url))
-        assert _recorded_revision(database_url) == STAGE_10_REVISION
+        assert RETIRED_TABLES.isdisjoint(set(table_names(database_url)))
+        assert _recorded_revision(database_url) == HEAD_REVISION
 
     def test_stage_two_data_survives_the_upgrade(self, settings: Settings) -> None:
         database_url = self._stage_two_database(settings)
@@ -330,12 +371,12 @@ class TestSchemaStatus:
             unmigrated.dispose()
 
     def test_ok_once_migrated(self, database: Database) -> None:
-        assert applied_revision(database) == STAGE_10_REVISION
+        assert applied_revision(database) == HEAD_REVISION
         assert schema_status(database) == "ok"
 
-    def test_expected_revision_is_the_stage_ten_revision(self) -> None:
+    def test_expected_revision_is_the_head_revision(self) -> None:
         """The code's expected head must match the newest migration on disk."""
-        assert expected_revision() == STAGE_10_REVISION
+        assert expected_revision() == HEAD_REVISION
 
     def test_pending_for_a_database_left_at_stage_two(self, settings: Settings) -> None:
         database_url = _prepare(settings)
@@ -371,3 +412,15 @@ class TestOfflineMode:
         assert "ck_daily_habit_entries_skip_reason_matches_status" in emitted
         assert "CREATE TABLE experiments" in emitted
         assert "ck_experiments_date_order" in emitted
+        # The head revision alters two tables in place and rebuilds two.
+        assert 'ALTER TABLE areas ADD COLUMN "key" VARCHAR(64)' in emitted
+        assert "CREATE UNIQUE INDEX uq_habits_key" in emitted
+        assert "ALTER TABLE habit_versions RENAME TO habit_versions__previous" in emitted
+        assert "value_type VARCHAR(16)" in emitted
+        assert "value_labels JSON" in emitted
+        assert "CONSTRAINT ck_habit_versions_value_scale_shape" in emitted
+        assert "CONSTRAINT ck_daily_habit_entries_value_range" in emitted
+        assert 'INSERT INTO "daily_habit_entries"' in emitted
+        # A database that never had the retired prototype tables still gets a
+        # complete, harmless script.
+        assert 'DROP TABLE IF EXISTS "indicator_areas"' in emitted

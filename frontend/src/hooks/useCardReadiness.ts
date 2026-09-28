@@ -39,6 +39,16 @@ import { useCardTimer } from './useCardTimer'
  *
  * Interacting with a field therefore stops the countdown without ever hiding
  * or unmounting the button.
+ *
+ * A hand-confirm is terminal for the revision it was made on
+ * ----------------------------------------------------------
+ * The commit that puts an enabled «ОК» on screen happens *before* the readiness
+ * effect below flushes, so a click can land in that window. That effect begins
+ * with `reset()`, which would then undo a completion the user has already made
+ * and can already see. `confirmed` records the revision that was completed by
+ * hand, and the effect refuses to touch the timer for it: the user's click
+ * always outranks the automatic countdown lifecycle. A new value (a new
+ * revision) is the one thing that makes a fresh countdown meaningful again.
  */
 export function useCardReadiness({ revision, savedRevision, stored, filled, error, completed, onDone }: {
   revision: number
@@ -64,6 +74,10 @@ export function useCardReadiness({ revision, savedRevision, stored, filled, erro
   const keyboardInput = useRef(true)
   const callback = useRef(onDone)
   callback.current = onDone
+  /** The revision the user completed by hand; terminal for the timer lifecycle. */
+  const confirmed = useRef<number | null>(null)
+  /** This completion was already reported, so it can never be reported twice. */
+  const reported = useRef(false)
   // Three independent answers — see the module docstring.
   const settled = revision > 0 && revision === savedRevision
   const showOk = stored && filled && !completed
@@ -72,8 +86,11 @@ export function useCardReadiness({ revision, savedRevision, stored, filled, erro
   const { reset, startCountdown, timerState, confirmNow: confirmTimerNow } = timer
   /** Complete by hand — only ever with the newest value stored. */
   const confirmNow = useCallback(() => {
-    if (canConfirm) confirmTimerNow()
-  }, [canConfirm, confirmTimerNow])
+    if (!canConfirm) return
+    // Terminal for this revision: see the "hand-confirm is terminal" note.
+    confirmed.current = revision
+    confirmTimerNow()
+  }, [canConfirm, confirmTimerNow, revision])
 
   /** Re-derive engagement from the two sources a click cannot fake. */
   const syncEngagement = useCallback(() => {
@@ -113,13 +130,24 @@ export function useCardReadiness({ revision, savedRevision, stored, filled, erro
   }, [reset])
 
   useEffect(() => {
+    // The user already completed this revision by hand: arming or resetting now
+    // would cancel that completion (this effect can flush after the click).
+    if (confirmed.current === revision) return
     reset()
     // Only a card that is stored, filled and left alone counts down.
     if (canCountdown) startCountdown()
   }, [revision, canCountdown, reset, startCountdown])
 
   useEffect(() => {
-    if (timerState === 'done' && canConfirm) callback.current()
+    // Leaving `done` — a reset or a fresh countdown — makes the next `done` a
+    // new completion rather than a repeat of this one.
+    if (timerState !== 'done') {
+      reported.current = false
+      return
+    }
+    if (!canConfirm || reported.current) return
+    reported.current = true
+    callback.current()
   }, [timerState, canConfirm])
 
   return {

@@ -15,7 +15,7 @@ class ReadModel(BaseModel):
 
 class ScoreRead(ReadModel):
     score: float | None
-    completed_weight: int
+    completed_weight: float
     required_weight: int
 
 
@@ -30,6 +30,9 @@ class ObligationRead(ReadModel):
 class DayProgressRead(ScoreRead):
     entry_date: date
     obligations: list[ObligationRead]
+    filled_count: int
+    total_count: int
+    completion: float | None
 
 
 class WeekHabitProgressRead(ScoreRead):

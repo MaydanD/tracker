@@ -1,8 +1,13 @@
 """Daily entry schemas.
 
 Shape only: ranges, precision and cross-field rules (future dates, skip reasons,
-quantities) are decided by ``app.domain.daily`` and reported with stable error
-codes, so the rules exist in exactly one place.
+quantities, values against the scale of the day) are decided by
+``app.domain.daily`` and reported with stable error codes, so the rules exist in
+exactly one place.
+
+``value`` is the answer of a habit that is tracked on a value scale: a whole
+number on that scale, where ``0`` is a real recorded answer and only a missing
+entry means "not recorded".
 
 ``quantity_value`` is accepted as a decimal and returned as a JSON *number* —
 JSON has no decimal type, and the exact value is preserved in the database as an
@@ -23,7 +28,8 @@ from app.domain.daily import (
     SKIP_REASON_MAX_LENGTH,
     EntryStatus,
 )
-from app.domain.tracking import TrackingMode
+from app.domain.habits import Importance
+from app.domain.tracking import Direction, TrackingMode, ValueType
 from app.schemas.areas import AreaSummary
 from app.schemas.habits import ScheduleRead
 from app.services.daily import DayItem
@@ -38,6 +44,13 @@ class DailyEntryWrite(BaseModel):
 
     status: EntryStatus
     quantity_value: Decimal | None = None
+    value: int | None = Field(
+        default=None, strict=True,
+        description=(
+            "Answer of a value-tracked habit (0/1, or 0–3); 0 is a recorded "
+            "answer, not an empty one."
+        ),
+    )
     skip_reason: str | None = Field(default=None, max_length=SKIP_REASON_MAX_LENGTH)
     note: str | None = Field(default=None, max_length=NOTE_MAX_LENGTH)
 
@@ -68,8 +81,15 @@ class DailyEntryRead(BaseModel):
     habit_id: int
     entry_date: date
     status: EntryStatus
+    value: int | None = Field(
+        default=None,
+        description=(
+            "Answer of a value-tracked habit; null for a completion habit or "
+            "when nothing is recorded."
+        ),
+    )
     quantity_value: float | None = Field(
-        default=None, description="Exact stored value; null when not recorded."
+        default=None, description="Exact stored quantity; null when not recorded."
     )
     quantity_unit: str | None = Field(
         default=None,
@@ -93,6 +113,7 @@ class DailyEntryRead(BaseModel):
             habit_id=entry.habit_id,
             entry_date=entry.entry_date,
             status=EntryStatus(entry.status),
+            value=entry.value,
             quantity_value=None if quantity is None else float(quantity.value),
             quantity_unit=version.quantity_unit,
             skip_reason=entry.skip_reason,
@@ -112,10 +133,19 @@ class DayItemRead(BaseModel):
     habit_id: int
     name: str
     area: AreaSummary
+    #: How much the habit matters: `low`, `normal` or `high`.
+    importance: Importance
+    #: Historical score coefficient, independent of importance.
     weight: int
     tracking_mode: TrackingMode
     quantity_unit: str | None
     quantity_allows_decimal: bool
+    #: ``null`` for a completion habit; otherwise the scale it is answered on.
+    value_type: ValueType | None
+    #: One label per value of the scale, in the user's own words.
+    value_labels: list[str] | None
+    #: Which end of the scale is good; ``null`` for a completion habit.
+    direction: Direction | None
     schedule: ScheduleRead
     is_archived: bool
     entry: DailyEntryRead | None
@@ -129,10 +159,14 @@ class DayItemRead(BaseModel):
             habit_id=item.habit.id,
             name=version.name,
             area=AreaSummary.from_model(version.area),
+            importance=version.importance_enum,
             weight=version.weight,
             tracking_mode=TrackingMode(version.tracking_mode),
             quantity_unit=version.quantity_unit,
             quantity_allows_decimal=version.quantity_allows_decimal,
+            value_type=version.value_type_enum,
+            value_labels=None if version.value_labels is None else list(version.value_labels),
+            direction=version.direction_enum,
             schedule=ScheduleRead.from_domain(version.schedule),
             is_archived=item.habit.is_archived,
             entry=(

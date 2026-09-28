@@ -4,14 +4,18 @@ Daily obligations use each day's version. A flexible weekly component uses the
 first weekly-scheduled day's version in that Mon–Sun week (full quota, no
 proration). Only weekly-scheduled dates feed that component; daily dates feed
 their own obligations. Thus schedule changes never double-count a completion.
+
+Value entries count as recorded days, including zero. Evaluation uses direction;
+neutral answers contribute to completion only. Importance never enters score.
 """
 
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Literal
 
 from app.domain.schedule import Schedule, ScheduleType
+from app.domain.tracking import normalised_value
 
 ProgressStatus = Literal["satisfied", "pending", "failed"]
 DAY = timedelta(days=1)
@@ -30,6 +34,10 @@ class Version:
     weight: int
     schedule: Schedule
     area_id: int | None = None
+    #: True for a habit answered with a value: recorded, never "completed".
+    tracks_value: bool = False
+    value_type: str | None = None
+    direction: str | None = None
 
 
 @dataclass(frozen=True)
@@ -39,9 +47,29 @@ class HabitHistory:
     entries: dict[date, str]
     # Exclusive local calendar cutoff. None means active, not an inferred date.
     archived_on: date | None = None
+    values: dict[date, int] = field(default_factory=dict)
 
     def version_on(self, on: date) -> Version | None:
         return next((v for v in reversed(self.versions) if v.effective_from <= on), None)
+
+    def marked_on(self, on: date) -> bool:
+        version = self.version_on(on)
+        if version is not None and version.tracks_value:
+            return self.values.get(on) is not None
+        return self.entries.get(on) == "done"
+
+    def evaluation(self, on: date) -> tuple[float, int]:
+        version = self.version_on(on)
+        if version is None:
+            return 0, 0
+        if version.tracks_value:
+            if version.direction == "neutral":
+                return 0, 0
+            value = self.values.get(on)
+            fraction = (normalised_value(value, version.value_type, version.direction)
+                        if value is not None else 0)
+            return (fraction or 0) * version.weight, version.weight
+        return (version.weight if self.marked_on(on) else 0), version.weight
 
     def active_on(self, on: date) -> bool:
         return self.archived_on is None or on < self.archived_on
@@ -49,7 +77,7 @@ class HabitHistory:
 
 @dataclass(frozen=True)
 class Score:
-    completed_weight: int
+    completed_weight: float
     required_weight: int
 
     @property
@@ -72,6 +100,12 @@ class Obligation:
 class DayProgress(Score):
     entry_date: date
     obligations: tuple[Obligation, ...]
+    filled_count: int = 0
+    total_count: int = 0
+
+    @property
+    def completion(self) -> float | None:
+        return self.filled_count / self.total_count * 100 if self.total_count else None
 
 
 @dataclass(frozen=True)
@@ -107,23 +141,28 @@ class Streak:
 
 def day_progress(histories: tuple[HabitHistory, ...], on: date) -> DayProgress:
     obligations: list[Obligation] = []
+    completed = required = filled = total = 0
     for habit in histories:
         version = habit.version_on(on)
-        if (
-            not habit.active_on(on)
-            or version is None
-            or version.schedule.type != ScheduleType.DAILY
-        ):
+        if not habit.active_on(on) or version is None:
             continue
-        status = habit.entries.get(on)
-        obligations.append(Obligation(
-            habit_id=habit.habit_id, name=version.name, weight=version.weight,
-            entry_status=status, satisfied=status == "done",
-        ))
+        total += 1
+        filled += int(habit.values.get(on) is not None if version.tracks_value
+                      else habit.entries.get(on) is not None)
+        if version.schedule.type != ScheduleType.DAILY:
+            continue
+        earned, denominator = habit.evaluation(on)
+        completed += earned
+        required += denominator
+        if denominator:
+            obligations.append(Obligation(
+                habit_id=habit.habit_id, name=version.name, weight=denominator,
+                entry_status=habit.entries.get(on), satisfied=earned == denominator,
+            ))
     return DayProgress(
-        completed_weight=sum(o.weight for o in obligations if o.satisfied),
-        required_weight=sum(o.weight for o in obligations),
+        completed_weight=completed, required_weight=required,
         entry_date=on, obligations=tuple(obligations),
+        filled_count=filled, total_count=total,
     )
 
 
@@ -132,6 +171,7 @@ def week_habit_progress(
 ) -> WeekHabitProgress | None:
     start, end = week_bounds(on)
     daily_required = daily_done = required = completed = weekly_done = 0
+    weekly_earned = 0.0
     anchor: Version | None = None
     last: Version | None = None
     for ordinal in range(start.toordinal(), end.toordinal() + 1):
@@ -140,21 +180,25 @@ def week_habit_progress(
         if version is None or not habit.active_on(day):
             continue
         last = version
-        done = habit.entries.get(day) == "done" and day <= today
+        done = habit.marked_on(day) and day <= today
+        earned, denominator = habit.evaluation(day)
         if version.schedule.type == ScheduleType.DAILY:
             daily_required += 1
             daily_done += int(done)
-            required += version.weight
-            completed += version.weight if done else 0
+            required += denominator
+            completed += earned if day <= today else 0
         else:
             anchor = anchor or version
             weekly_done += int(done)
+            if done:
+                weekly_earned += earned / denominator if denominator else 0
     if last is None:
         return None
     quota = anchor.schedule.weekly_required_count if anchor else 0
     if anchor:
-        required += quota * anchor.weight
-        completed += min(quota, weekly_done) * anchor.weight
+        coefficient = 0 if anchor.tracks_value and anchor.direction == "neutral" else anchor.weight
+        required += quota * coefficient
+        completed += min(quota, weekly_earned) * coefficient
     satisfied = daily_done == daily_required and weekly_done >= quota
     status: ProgressStatus = (
         "satisfied" if satisfied else ("failed" if end < today else "pending")
@@ -232,12 +276,15 @@ def _iter_daily_spans(
     while cursor <= as_of:
         # Today's unfinished day neither adds a day nor breaks the run; it is
         # simply skipped, exactly like the backward scan.
-        if cursor == today and habit.entries.get(cursor) != "done":
+        if cursor == today and not habit.marked_on(cursor):
             cursor += DAY
             continue
         config = habit.version_on(cursor)
-        is_daily = config is not None and config.schedule.type == ScheduleType.DAILY
-        if is_daily and habit.entries.get(cursor) == "done":
+        is_daily = (
+            config is not None
+            and config.schedule.type == ScheduleType.DAILY
+        )
+        if is_daily and habit.marked_on(cursor):
             if length == 0:
                 run_start = cursor
             length += 1

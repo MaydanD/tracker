@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { backupStatusFixture } from '../test/backupFixture'
 import * as backupApi from '../api/backup'
 import { HEALTHY_HEALTH, READY, jsonResponse } from '../test/fetchStub'
 import { SettingsPage } from './SettingsPage'
@@ -34,13 +35,14 @@ function withStatusRoutes(
 ) {
   return async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
+    if (url.endsWith('/api/backup/settings') || url.endsWith('/api/backup/auto')) return response(backupStatusFixture)
     if (url.endsWith('/api/health')) return jsonResponse(HEALTHY_HEALTH)
     if (url.endsWith('/api/ready')) return jsonResponse(READY)
     return next(input, init)
   }
 }
 
-const STATUS_PATHS = ['/api/health', '/api/ready']
+const STATUS_PATHS = ['/api/health', '/api/ready', '/api/backup/settings', '/api/backup/auto']
 
 /** Recorded requests that carry backup data, ignoring the connection check. */
 function dataCalls() {
@@ -75,7 +77,7 @@ describe('Данные и резервные копии', () => {
   })
 
   it.each([
-    ['Скачать резервную копию', '/api/backup'],
+    ['Создать резервную копию', '/api/backup'],
     ['Экспортировать JSON', '/api/export/json'],
     ['Экспортировать CSV', '/api/export/csv'],
   ])('downloads via %s', async (label, path) => {
@@ -206,9 +208,9 @@ describe('Данные и резервные копии', () => {
   it('does not expose raw server errors and recovers download controls', async () => {
     vi.mocked(fetch).mockImplementation(withStatusRoutes(async () => response({ error: { code: 'internal_error', message: 'Traceback secret path' } }, 500)))
     renderPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Скачать резервную копию' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Создать резервную копию' }))
     expect(await screen.findByRole('alert')).not.toHaveTextContent('Traceback')
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Скачать резервную копию' })).toBeEnabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Создать резервную копию' })).toBeEnabled())
   })
 })
 

@@ -1,5 +1,5 @@
 import type { Habit } from '../../api/types'
-import { configurationDateLabel, scheduleLabel, trackingModeLabel, weightLabel } from './options'
+import { configurationDateLabel, weightLabel, importanceLabel, scheduleLabel, trackingModeLabel } from './options'
 
 export interface HabitListProps {
   habits: Habit[]
@@ -43,11 +43,14 @@ export function HabitList({
                 ) : null}
               </span>
               <span className="list__meta">
-                <span className="pill">Важность {habit.weight} ·{' '}
-                  {weightLabel(habit.weight)}
-                </span>
+                <span className="pill">Вес: {weightLabel(habit.weight)}</span>
+                <span className="pill">Важность: {importanceLabel(habit.importance)}</span>
                 <span className="pill">
-                  {trackingModeLabel(habit.tracking_mode, habit.quantity_unit)}
+                  {trackingModeLabel(
+                    habit.tracking_mode,
+                    habit.quantity_unit,
+                    habit.value_type,
+                  )}
                 </span>
                 <span className="pill">{scheduleLabel(habit.schedule)}</span>
                 <span className="pill">

@@ -69,6 +69,12 @@ class DailyHabitEntry(Base):
             "quantity_value_micro IS NULL OR quantity_value_micro >= 0",
             name="quantity_non_negative",
         ),
+        # The answer of a value-tracked habit. A recorded ``0`` is a real answer
+        # ("нет", "no coffee"); the absence of a row is the only "not recorded".
+        CheckConstraint(
+            "value IS NULL OR (typeof(value) = 'integer' AND value BETWEEN 0 AND 3)",
+            name="value_range",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -80,7 +86,13 @@ class DailyHabitEntry(Base):
     )
     entry_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
 
+    # ``done``/``missed``/``skipped`` for a completion habit; for a habit
+    # answered with a value the row means "this day was recorded", and the answer
+    # lives in :attr:`value`.
     status: Mapped[str] = mapped_column(String(16), nullable=False)
+    # The answer of a value-tracked habit (0/1 or 0..3), or None when the habit is
+    # tracked as completion.
+    value: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Exact millionths of the historical quantity unit; never a float.
     quantity_value_micro: Mapped[int | None] = mapped_column(Integer, nullable=True)
     skip_reason: Mapped[str | None] = mapped_column(
@@ -105,6 +117,11 @@ class DailyHabitEntry(Base):
         if self.quantity_value_micro is None:
             return None
         return Quantity(scaled=self.quantity_value_micro)
+
+    @property
+    def has_value(self) -> bool:
+        """Whether an answer is recorded. A recorded ``0`` counts as recorded."""
+        return self.value is not None
 
     def __repr__(self) -> str:  # pragma: no cover - debugging convenience
         return (

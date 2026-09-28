@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.time import SYSTEM_CLOCK, utc_now
 from app.db.models import Area, Habit, HabitVersion
-from app.db.queries import effective_version, load_habits
+from app.db.queries import effective_version, load_habits, order_key
 from app.domain.errors import (
     AreaArchivedError,
     HabitConfigurationNotFoundError,
@@ -51,8 +51,13 @@ def list_habits(
     return sorted(
         habits,
         key=lambda habit: (
-            habit.current_version.area.name.casefold(),
-            habit.current_version.name.casefold(),
+            order_key(
+                sort_order=habit.current_version.area.sort_order,
+                name=habit.current_version.area.name,
+            ),
+            order_key(
+                sort_order=habit.sort_order, name=habit.current_version.name
+            ),
         ),
     )
 

@@ -39,6 +39,19 @@ function tickRaf(time: number) {
   for (const cb of pending) cb(time)
 }
 
+/**
+ * Advance the fake clock *relative* to where it already is.
+ *
+ * The countdown captures its start from `performance.now()` at the moment the
+ * readiness effect arms it. Jumping the clock to an absolute timestamp would
+ * therefore be meaningless for a timer armed after the jump: it would start
+ * counting from the jumped value, and the next fixed tick would fall short of
+ * five seconds and never complete.
+ */
+function advanceRaf(ms: number) {
+  tickRaf(fakeTime + ms)
+}
+
 afterEach(() => vi.unstubAllGlobals())
 
 // ---------------------------------------------------------------------------
@@ -50,6 +63,17 @@ const TODAY = '2026-09-27'
 function makeEntry(id = 1, status: DailyEntry['status'] = 'done'): DailyEntry {
   return dailyEntryFixture({ id, habit_id: 1, entry_date: TODAY, status })
 }
+
+/** The card's «ОК» control (rendered as soon as a value is stored). */
+const okButton = () => screen.getByRole('button', { name: /ОК/ })
+/**
+ * The countdown is armed by a React effect, which flushes *after* the commit
+ * that first puts «ОК» on screen. The button can therefore be visible (and
+ * enabled) while the timer has not started yet, so tests that reason about the
+ * five seconds must wait for the armed state — visible in the button's own
+ * label — instead of assuming the effect has already run.
+ */
+const countdownArmed = () => /до автоподтверждения/.test(okButton().getAttribute('aria-label') ?? '')
 
 function renderCard(
   itemOverrides: Partial<DayItem> = {},
@@ -112,6 +136,28 @@ describe('HabitCard', () => {
     await waitFor(() => expect(onSettled).toHaveBeenCalledWith(1, entry))
   })
 
+  it('keeps a value card without a value open, and treats a stored 0 as an answer', () => {
+    // A row recorded before the habit became a scale says "done" but holds no
+    // value: the card still needs answering, so «ОК» must not be offered.
+    const unanswered = renderCard({
+      value_type: 'ordinal_4',
+      value_labels: ['0', 'мало', 'нормально', 'много'],
+      direction: 'positive',
+      entry: dailyEntryFixture({ habit_id: 1, entry_date: TODAY, value: null }),
+    })
+    expect(screen.queryByRole('button', { name: /ОК/ })).toBeNull()
+    unanswered.unmount()
+
+    // Zero is a real answer, so the card is filled and «ОК» is on screen.
+    renderCard({
+      value_type: 'ordinal_4',
+      value_labels: ['0', 'мало', 'нормально', 'много'],
+      direction: 'positive',
+      entry: dailyEntryFixture({ habit_id: 1, entry_date: TODAY, value: 0 }),
+    })
+    expect(screen.getByRole('button', { name: /ОК/ })).toBeInTheDocument()
+  })
+
   it('shows the OK button and starts the countdown after a successful save', async () => {
     const entry = makeEntry()
     stubApi({ [`PUT /api/habits/1/entries/${TODAY}`]: () => jsonResponse(entry) })
@@ -119,9 +165,10 @@ describe('HabitCard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
     await screen.findByRole('button', { name: /ОК/ })
+    await waitFor(() => expect(countdownArmed()).toBe(true))
 
     // Simulate the countdown progressing
-    act(() => tickRaf(2_500))
+    act(() => advanceRaf(2_500))
     expect(screen.getByRole('button', { name: /ОК/ })).toBeInTheDocument()
   })
 
@@ -132,8 +179,9 @@ describe('HabitCard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
     await screen.findByRole('button', { name: /ОК/ })
+    await waitFor(() => expect(countdownArmed()).toBe(true))
 
-    act(() => tickRaf(5_000))
+    act(() => advanceRaf(5_000))
 
     await waitFor(() => expect(onTimerDone).toHaveBeenCalledWith(1))
   })
@@ -145,8 +193,11 @@ describe('HabitCard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
     const okBtn = await screen.findByRole('button', { name: /ОК/ })
+    // Wait for the countdown to be armed: a click that races the arming effect
+    // would have its confirmation reset by the very effect that starts it.
+    await waitFor(() => expect(countdownArmed()).toBe(true))
 
-    act(() => tickRaf(1_000))  // partway
+    act(() => advanceRaf(1_000))  // partway
     fireEvent.click(okBtn)
 
     expect(onTimerDone).toHaveBeenCalledWith(1)
@@ -193,20 +244,22 @@ describe('HabitCard', () => {
     // First save
     fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
     await screen.findByRole('button', { name: /ОК/ })
-    act(() => tickRaf(3_000))   // 3 s in
+    await waitFor(() => expect(countdownArmed()).toBe(true))
+    act(() => advanceRaf(3_000))   // 3 s in
 
     // Change value — should reset timer. The button stays on screen while the
-    // new value is written, so wait for it to become confirmable again before
-    // advancing the clock.
+    // new value is written, so wait for it to become confirmable *and* for the
+    // fresh countdown to be armed before advancing the clock.
     fireEvent.click(screen.getByRole('button', { name: 'Пропущено' }))
     await waitFor(() => expect(screen.getByRole('button', { name: /ОК/ })).toBeEnabled())
+    await waitFor(() => expect(countdownArmed()).toBe(true))
 
-    // The old timer's tick should NOT fire onTimerDone
-    act(() => tickRaf(5_000))   // would have been 5 s from first save
+    // Two seconds into the *new* countdown: the old timer must not have fired.
+    act(() => advanceRaf(2_000))
     expect(onTimerDone).not.toHaveBeenCalled()
 
-    // After a full 5 s from the second save, it fires
-    act(() => tickRaf(10_000))
+    // Five seconds after the second save, it fires
+    act(() => advanceRaf(3_000))
     await waitFor(() => expect(onTimerDone).toHaveBeenCalledWith(1))
   })
 
@@ -427,13 +480,13 @@ describe('HabitCard — «ОК» stays while a field is in use', () => {
     fireEvent.focus(note())
     await screen.findByRole('button', { name: /ОК/ })
 
-    act(() => tickRaf(5_000))
+    act(() => advanceRaf(5_000))
     expect(counting()).toBe(false)
     expect(onTimerDone).not.toHaveBeenCalled()
 
     fireEvent.blur(note(), { relatedTarget: null })
     await waitFor(() => expect(counting()).toBe(true))
-    act(() => tickRaf(10_000))
+    act(() => advanceRaf(5_000))
     await waitFor(() => expect(onTimerDone).toHaveBeenCalledWith(1))
   })
 
@@ -444,13 +497,13 @@ describe('HabitCard — «ОК» stays while a field is in use', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
     await screen.findByRole('button', { name: /ОК/ })
     await waitFor(() => expect(counting()).toBe(true))
-    act(() => tickRaf(3_000))
+    act(() => advanceRaf(3_000))
 
     fireEvent.focus(note())
 
     expect(counting()).toBe(false)
     expect(okButton()).toBeInTheDocument()
-    act(() => tickRaf(10_000))
+    act(() => advanceRaf(10_000))
     expect(onTimerDone).not.toHaveBeenCalled()
   })
 
@@ -470,6 +523,32 @@ describe('HabitCard — «ОК» stays while a field is in use', () => {
     fireEvent.click(okButton())
 
     expect(onTimerDone).toHaveBeenCalledWith(1)
+  })
+
+  it('keeps a hand-confirm when the readiness effect runs afterwards', async () => {
+    // The «ОК» button is on screen (and enabled) before the effect that arms the
+    // countdown has flushed. A click in that window must win: the pending
+    // effect must not reset the card back out of its completed state.
+    stubApi({ [`PUT /api/habits/1/entries/${TODAY}`]: () => jsonResponse(makeEntry()) })
+    const { onTimerDone } = renderCard()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
+    const ok = await screen.findByRole('button', { name: /ОК/ })
+    await waitFor(() => expect(ok).toBeEnabled())
+    await waitFor(() => expect(counting()).toBe(true))
+
+    // A field is in use, so the countdown is paused — the user confirms anyway.
+    fireEvent.focus(note())
+    fireEvent.click(ok)
+    expect(onTimerDone).toHaveBeenCalledTimes(1)
+
+    // Leaving the field re-runs the arming effect for the same revision; a
+    // re-armed countdown would complete a second time right here.
+    fireEvent.blur(note(), { relatedTarget: null })
+    act(() => advanceRaf(10_000))
+
+    expect(onTimerDone).toHaveBeenCalledTimes(1)
+    expect(counting()).toBe(false)
   })
 
   it('keeps «ОК» through lock and unlock, even with the note in focus', async () => {

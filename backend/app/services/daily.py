@@ -24,7 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import DailyHabitEntry, Habit, HabitVersion
-from app.db.queries import effective_version, load_habits
+from app.db.queries import effective_version, load_habits, order_key
 from app.domain.daily import EntryStatus, EntryValues, validate_entry
 from app.domain.errors import HabitNotFoundError
 from app.services import habits as habit_service
@@ -77,6 +77,7 @@ def save_entry(
     status: EntryStatus | str,
     today: date,
     quantity_value: object | None = None,
+    value: object | None = None,
     skip_reason: str | None = None,
     note: str | None = None,
 ) -> EntryView:
@@ -86,10 +87,14 @@ def save_entry(
     recorded twice and the unique constraint is never something a caller has to
     work around.
 
+    ``value`` is the answer of a habit tracked on a value scale, ``quantity_value``
+    the optional number of a quantity habit. Which one applies is decided by the
+    configuration effective on that date, not by the caller.
+
     Raises domain errors for every rejected case: an unknown habit, a date before
     the habit existed, a status that a future date does not accept, a missing or
-    misplaced skip reason, and a quantity the historical configuration does not
-    allow.
+    misplaced skip reason, a missing value for a value-tracked habit, and a
+    quantity the historical configuration does not allow.
     """
     # Resolves the habit *and* the configuration effective on that date, raising
     # habit_not_found / configuration_not_found as appropriate.
@@ -101,6 +106,7 @@ def save_entry(
         entry_date=entry_date,
         today=today,
         quantity_value=quantity_value,
+        value=value,
         skip_reason=skip_reason,
         note=note,
     )
@@ -157,6 +163,7 @@ def _write(
         session.add(entry)
 
     entry.status = values.status.value
+    entry.value = values.value
     entry.quantity_value_micro = (
         values.quantity.scaled if values.quantity is not None else None
     )
@@ -220,13 +227,15 @@ def day_overview(session: Session, day: date) -> list[DayItem]:
 
         items.append(DayItem(habit=habit, version=version, entry=entry))
 
-    # Same ordering as the habit list (area, then name), so the day screen does
+    # Same ordering as the habit list (area, then habit), so the day screen does
     # not reshuffle when the user changes the date.
     return sorted(
         items,
         key=lambda item: (
-            item.version.area.name.casefold(),
-            item.version.name.casefold(),
+            order_key(
+                sort_order=item.version.area.sort_order, name=item.version.area.name
+            ),
+            order_key(sort_order=item.habit.sort_order, name=item.version.name),
         ),
     )
 

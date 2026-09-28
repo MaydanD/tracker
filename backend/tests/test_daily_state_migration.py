@@ -18,11 +18,31 @@ def test_stage_four_data_survives_roundtrip(settings):
     try:
         with engine.begin() as connection:
             connection.execute(text("INSERT INTO daily_habit_entries (habit_id, entry_date, status, note, created_at, updated_at) VALUES (1, '2026-09-24', 'done', 'unchanged', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"))
-        tables = ("areas", "habits", "habit_versions", "daily_habit_entries", "app_metadata")
+        # Columns that already existed, named explicitly: later revisions add
+        # columns, so a bare SELECT * would compare different shapes rather than
+        # the point of the test — that no stored value changed.
+        columns = {
+            "areas": "id, name, color, is_archived, archived_at, created_at, updated_at",
+            "habits": "id, is_archived, archived_at, created_at, updated_at",
+            "habit_versions": (
+                "id, habit_id, version_number, effective_from, created_at, name, "
+                "description, area_id, weight, tracking_mode, quantity_unit, "
+                "quantity_allows_decimal, schedule_type, schedule_weekdays, "
+                "schedule_times_per_week"
+            ),
+            "daily_habit_entries": (
+                "id, habit_id, entry_date, quantity_value_micro, status, "
+                "skip_reason, note, created_at, updated_at"
+            ),
+            "app_metadata": "*",
+        }
 
         def snapshot():
             with engine.connect() as connection:
-                return {table: connection.execute(text(f"SELECT * FROM {table}")).all() for table in tables}
+                return {
+                    table: connection.execute(text(f"SELECT {expr} FROM {table}")).all()
+                    for table, expr in columns.items()
+                }
 
         before = snapshot()
         run_migrations(url)

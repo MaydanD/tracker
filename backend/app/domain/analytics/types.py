@@ -76,6 +76,7 @@ class EntrySource:
     quantity_micro: int | None
     skip_reason: str | None
     note: str | None
+    value: int | None = None
 
 
 @dataclass(frozen=True)

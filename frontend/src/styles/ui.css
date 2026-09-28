@@ -940,3 +940,74 @@ ul.banner--error {
 .daily-state__duration input { min-width: 64px; width: 64px; }
 .daily-state__actions { margin-top: 10px; gap: 8px; }
 .daily-state__fields:disabled { opacity: .6; }
+
+.telegram-settings { margin-top: 1.5rem; border-top: 1px solid var(--border-color, #d9dee5); padding-top: 1rem; }
+.telegram-settings > label { display: flex; flex-direction: column; gap: .4rem; margin: 1rem 0; }
+.telegram-settings input:not([type="checkbox"]) { width: 100%; max-width: 36rem; }
+.telegram-settings > .telegram-settings__toggle { flex-direction: row; align-items: center; }
+
+/* ── Telegram connection status badge ─────────────────────────────────────── */
+
+.tg-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  margin: 0.5rem 0 0.25rem;
+}
+
+/* Dot indicator — colour alone is never the sole differentiator (text carries
+   the meaning); the dot is purely decorative so aria-hidden is applied inline. */
+.tg-status__dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--status-checking);
+}
+
+.tg-status--connected   .tg-status__dot { background: var(--status-healthy); }
+.tg-status--error       .tg-status__dot { background: var(--status-offline); }
+.tg-status--unchecked   .tg-status__dot { background: var(--status-degraded); }
+.tg-status--unconfigured .tg-status__dot { background: var(--status-checking); }
+.tg-status--checking    .tg-status__dot {
+  background: var(--status-checking);
+  animation: tg-pulse 1s ease-in-out infinite;
+}
+
+.tg-status--connected   .tg-status__label { color: var(--status-healthy); }
+.tg-status--error       .tg-status__label { color: var(--status-offline); }
+.tg-status--unchecked   .tg-status__label { color: var(--status-degraded); }
+.tg-status--unconfigured .tg-status__label { color: var(--color-text-muted); }
+.tg-status--checking    .tg-status__label { color: var(--color-text-muted); }
+
+.tg-status__verified-at {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/* Inline note beside the badge while a background auto-check runs. It shares
+   the badge row (which never wraps), so starting or finishing a check cannot
+   reflow the card. */
+.tg-status__checking {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/* Transient action error shown below the badge when an explicit check/send
+   fails but we still know the connection was previously verified. */
+.tg-status__action-error {
+  font-size: 12px;
+  color: var(--status-offline);
+  margin: 0.15rem 0 0;
+}
+
+@keyframes tg-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}

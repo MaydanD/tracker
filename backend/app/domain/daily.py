@@ -4,6 +4,12 @@ One entry records what the user did for one habit on one *calendar date*. The
 rules that make that safe live here as pure functions, so they can be tested
 without a database:
 
+* **Two kinds of habit.** A *completion* habit is answered ``done``/``missed``/
+  ``skipped``. A habit whose configuration carries a value scale
+  (:mod:`app.domain.tracking`) is instead answered with a *value* — ``нет``/``да``
+  or one of four labels — and that number is what the entry stores. A recorded
+  ``0`` is a real answer; only the absence of a row means "not recorded".
+
 * **"no entry" is a state.** A missing record means "the user has not said
   anything yet" — it is *never* automatically interpreted as ``missed``. Only an
   explicit ``missed`` entry means the habit was not done. Nothing in Tracker
@@ -59,9 +65,11 @@ from app.domain.errors import (
     QuantityNotAllowedError,
     SkipReasonNotAllowedError,
     SkipReasonRequiredError,
+    ValueNotAllowedError,
+    ValueRequiredError,
 )
 from app.domain.habits import HabitConfig
-from app.domain.tracking import TrackingMode
+from app.domain.tracking import TrackingMode, validate_value
 
 
 class EntryStatus(StrEnum):
@@ -294,6 +302,8 @@ class EntryValues:
     quantity: Quantity | None
     skip_reason: str | None
     note: str | None
+    #: The answer of a value-tracked habit, or ``None`` for a completion habit.
+    value: int | None = None
 
 
 def validate_entry(
@@ -303,15 +313,34 @@ def validate_entry(
     entry_date: date,
     today: date,
     quantity_value: object | None = None,
+    value: object | None = None,
     skip_reason: str | None = None,
     note: str | None = None,
 ) -> EntryValues:
     """Apply every daily-entry rule and return the values to store.
 
     ``configuration`` is the habit configuration effective on ``entry_date``, so
-    a historical edit is validated against the settings that applied back then.
+    a historical edit is validated against the settings that applied back then —
+    including the labels and the width of the scale.
     """
     resolved_status = coerce_status(status)
+
+    if configuration.tracks_value:
+        return _validate_value_entry(
+            configuration=configuration,
+            status=resolved_status,
+            entry_date=entry_date,
+            today=today,
+            value=value,
+            quantity_value=quantity_value,
+            skip_reason=skip_reason,
+            note=note,
+        )
+
+    if value is not None:
+        raise ValueNotAllowedError(
+            details={"tracking_mode": configuration.tracking_mode.value}
+        )
 
     ensure_status_allowed_on(status=resolved_status, entry_date=entry_date, today=today)
 
@@ -320,4 +349,58 @@ def validate_entry(
         quantity=validate_quantity(configuration, quantity_value),
         skip_reason=normalise_skip_reason(resolved_status, skip_reason),
         note=normalise_note(note),
+    )
+
+
+def _validate_value_entry(
+    *,
+    configuration: HabitConfig,
+    status: EntryStatus,
+    entry_date: date,
+    today: date,
+    value: object | None,
+    quantity_value: object | None,
+    skip_reason: str | None,
+    note: str | None,
+) -> EntryValues:
+    """The rules for a habit that is answered with a value.
+
+    Such a habit is *recorded* (``done``) or it is silent: a value has no
+    meaningful ``missed``, and an explicit skip reason belongs to the completion
+    model. Recording one for a day that has not happened is still refused, so a
+    future day stays unanswerable.
+    """
+    if status is not EntryStatus.DONE:
+        raise InvalidEntryStatusError(
+            "A habit answered with a value is recorded, not marked done or missed.",
+            details={"status": status.value, "value_type": configuration.value_type.value},  # type: ignore[union-attr]
+        )
+
+    if quantity_value is not None:
+        raise QuantityNotAllowedError(
+            "This habit does not track a quantity.",
+            details={"value_type": configuration.value_type.value},  # type: ignore[union-attr]
+        )
+    if skip_reason is not None:
+        raise SkipReasonNotAllowedError(
+            "A skip reason only applies to a deliberately skipped entry.",
+            details={"status": status.value},
+        )
+
+    ensure_status_allowed_on(status=status, entry_date=entry_date, today=today)
+
+    if value is None:
+        raise ValueRequiredError(
+            details={
+                "value_type": configuration.value_type.value,  # type: ignore[union-attr]
+                "max_value": (len(configuration.value_labels or ()) - 1),
+            }
+        )
+
+    return EntryValues(
+        status=status,
+        quantity=None,
+        skip_reason=None,
+        note=normalise_note(note),
+        value=validate_value(configuration.value_type, value),  # type: ignore[arg-type]
     )

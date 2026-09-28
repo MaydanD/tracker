@@ -12,7 +12,7 @@ function ScoreValue({ value }: { value: Score }) {
   return value.score === null ? <p>Нет обязательных привычек</p> : (
     <p>
       <strong>{value.score.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}%</strong>
-      {' · '}{value.completed_weight} / {value.required_weight} по весу
+      {' · '}{value.completed_weight.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} / {value.required_weight} по весу
     </p>
   )
 }
@@ -53,8 +53,9 @@ export function ProgressSummary({ progress }: { progress: ProgressState }) {
     <section aria-label="Показатели выполнения" className="progress-summary">
       <div>
         <h2>Оценка дня</h2>
+        {progress.day.total_count !== undefined ? <p>Заполнено: {progress.day.filled_count} / {progress.day.total_count}</p> : null}
         <ScoreValue value={progress.day} />
-        <p className="text-muted">Только ежедневные обязательства. Пропуск с причиной не повышает оценку.</p>
+        <p className="text-muted">С учётом направления шкалы. Нейтральные привычки учитываются только в заполнении.</p>
       </div>
       <div>
         <h2>Оценка недели</h2>

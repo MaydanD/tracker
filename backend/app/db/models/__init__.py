@@ -12,5 +12,5 @@ from app.db.models.habits import Habit, HabitVersion
 from app.db.models.insights import InsightSnapshot
 from app.db.models.system import AppMetadata
 
-__all__ = ["AppMetadata", "Area", "DailyHabitEntry", "DailyState", "Experiment", "Habit",
-           "HabitVersion", "InsightSnapshot"]
+__all__ = ["AppMetadata", "Area", "DailyHabitEntry", "DailyState", "Experiment",
+           "Habit", "HabitVersion", "InsightSnapshot"]

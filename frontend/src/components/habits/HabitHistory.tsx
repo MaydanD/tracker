@@ -1,7 +1,7 @@
 import { fetchHabitVersions } from '../../api/habits'
 import { useAsyncData } from '../../hooks/useAsyncData'
 import { ErrorBanner, LoadingText } from '../Feedback'
-import { configurationDateLabel, scheduleLabel, trackingModeLabel, weightLabel } from './options'
+import { configurationDateLabel, weightLabel, importanceLabel, scheduleLabel, trackingModeLabel } from './options'
 
 export interface HabitHistoryProps {
   habitId: number
@@ -34,10 +34,14 @@ export function HabitHistory({ habitId }: HabitHistoryProps) {
             <span className="versions__date">Действует с {configurationDateLabel(version.effective_from)}</span>
           </span>
           <span className="versions__detail">
-            {version.name} · {version.area.name} · важность {version.weight} (
-            {weightLabel(version.weight)}) ·{' '}
-            {trackingModeLabel(version.tracking_mode, version.quantity_unit)} ·{' '}
-            {scheduleLabel(version.schedule)}
+            {version.name} · {version.area.name} · вес {weightLabel(version.weight)} · важность{' '}
+            {importanceLabel(version.importance).toLowerCase()} ·{' '}
+            {trackingModeLabel(
+              version.tracking_mode,
+              version.quantity_unit,
+              version.value_type,
+            )}{' '}
+            · {scheduleLabel(version.schedule)}
           </span>
           {version.description ? (
             <span className="versions__note">{version.description}</span>

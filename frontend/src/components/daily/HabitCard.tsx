@@ -5,7 +5,8 @@ import { deleteDailyEntry, saveDailyEntry } from '../../api/daily'
 import type { DailyEntry, DailyEntryInput, DayItem, EntryStatus } from '../../api/types'
 import { useCardReadiness } from '../../hooks/useCardReadiness'
 import { OkButton } from './OkButton'
-import { scheduleLabel } from '../habits/options'
+import { importanceLabel, scheduleLabel } from '../habits/options'
+import { DIRECTION_LABEL } from './direction'
 import { DAILY_STATUS_OPTIONS, statusActionLabel, statusLabel } from './status'
 
 // ---------------------------------------------------------------------------
@@ -24,9 +25,13 @@ export interface HabitCardProps {
   inCompletedSection?: boolean
 }
 
-/** Local draft. `status === null` → no entry yet. */
+/**
+ * Local draft. `status === null` → no entry yet; `value === null` → no answer yet
+ * (a chosen `0` is an answer, not an empty one).
+ */
 interface Draft {
   status: EntryStatus | null
+  value: number | null
   quantity: string
   skipReason: string
   note: string
@@ -39,6 +44,7 @@ interface Draft {
 function draftFrom(entry: DailyEntry | null): Draft {
   return {
     status: entry?.status ?? null,
+    value: entry?.value ?? null,
     quantity:
       entry?.quantity_value == null ? '' : String(entry.quantity_value),
     skipReason: entry?.skip_reason ?? '',
@@ -46,11 +52,26 @@ function draftFrom(entry: DailyEntry | null): Draft {
   }
 }
 
+/**
+ * The answer a habit of this kind can be saved with, or `null` when the draft is
+ * not complete yet.
+ *
+ * A value-tracked habit is answered in one way only — a value on its own scale,
+ * recorded as a completed day — so it never carries a quantity or a skip reason.
+ */
 function buildInput(
   draft: Draft,
   tracksQuantity: boolean,
   allowsDecimal: boolean,
+  tracksValue: boolean,
 ): DailyEntryInput | null {
+  const note = draft.note.trim() || null
+
+  if (tracksValue) {
+    if (draft.value === null) return null
+    return { status: 'done', value: draft.value, note }
+  }
+
   if (draft.status === null) return null
   const rawQty = draft.quantity.trim().replace(',', '.')
   const quantity =
@@ -63,22 +84,45 @@ function buildInput(
 
   return {
     status: draft.status,
+    value: null,
     quantity_value: quantity,
     skip_reason: draft.status === 'skipped' ? draft.skipReason.trim() || null : null,
-    note: draft.note.trim() || null,
+    note,
   }
+}
+
+/** The words of a value scale, defaulting to the position when none are stored. */
+function valueLabels(item: DayItem): string[] {
+  const max = item.value_type === 'binary' ? 1 : 3
+  const stored = item.value_labels ?? []
+  return Array.from({ length: max + 1 }, (_, value) => stored[value] ?? String(value))
+}
+
+/** Every value of a scale, in order: `0..1` for binary, `0..3` for ordinal_4. */
+function valueOptions(item: DayItem): number[] {
+  const max = item.value_type === 'binary' ? 1 : 3
+  return Array.from({ length: max + 1 }, (_, value) => value)
 }
 
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
-/** Compact colour-coded status pill. */
-function StatusPill({ entry }: { entry: DailyEntry | null }) {
+/** Compact colour-coded status pill: the answer, or «Нет отметки». */
+function StatusPill({ entry, item }: { entry: DailyEntry | null; item: DayItem }) {
   if (entry === null) {
     return (
       <span className="ccard__pill ccard__pill--none" role="status" aria-label="Нет отметки">
         Нет отметки
+      </span>
+    )
+  }
+  if (item.value_type !== null) {
+    // The label of the chosen position — a recorded 0 shows as its own word,
+    // never as an empty card.
+    return (
+      <span role="status" className="ccard__pill ccard__pill--done">
+        {valueLabels(item)[entry.value ?? 0]}
       </span>
     )
   }
@@ -122,13 +166,18 @@ function HabitCardEditor({
   const [error, setError] = useState<string | null>(null)
 
   const tracksQuantity = item.tracking_mode === 'binary_quantity'
+  const tracksValue = item.value_type !== null
   const mounted = useRef(true)
   const generation = useRef(0)
   const queue = useRef(Promise.resolve())
   const [revision, setRevision] = useState(0)
   const [savedRevision, setSavedRevision] = useState(0)
   const readiness = useCardReadiness({ revision, savedRevision,
-    stored: savedEntry !== null, filled: savedEntry !== null,
+    stored: savedEntry !== null,
+    // A value habit is filled by its *value*: a `0` is an answer, and a row
+    // without one (a completion recorded before the habit became a scale) is
+    // not, so «ОК» is never offered for a card that still needs answering.
+    filled: savedEntry !== null && (!tracksValue || savedEntry.value !== null),
     error, completed: inCompletedSection,
     onDone: () => onTimerDone?.(item.habit_id) })
   const { timerState, progress, confirmNow, reset } = readiness
@@ -149,11 +198,22 @@ function HabitCardEditor({
   }
   function save(newDraft: Draft) {
     const version = beginChange()
-    const input = buildInput(newDraft, tracksQuantity, item.quantity_allows_decimal)
+    const input = buildInput(
+      newDraft,
+      tracksQuantity,
+      item.quantity_allows_decimal,
+      tracksValue,
+    )
     if (input === null || (newDraft.status === 'skipped' && !input.skip_reason)) {
       setBusy(false)
-      if (input === null && newDraft.status !== null) setError(item.quantity_allows_decimal
-        ? 'Укажите неотрицательное число.' : 'Для этой привычки допустимы только целые значения.')
+      if (
+        input === null &&
+        !tracksValue &&
+        newDraft.status !== null
+      ) {
+        setError(item.quantity_allows_decimal
+          ? 'Укажите неотрицательное число.' : 'Для этой привычки допустимы только целые значения.')
+      }
       return
     }
     setBusy(true)
@@ -211,6 +271,15 @@ function HabitCardEditor({
     void save(next)
   }
 
+  /** A value habit is answered by choosing a position on its own scale. */
+  function chooseValue(value: number) {
+    const next: Draft = { ...draft, status: 'done', value }
+    setDraft(next)
+    setError(null)
+    reset()
+    void save(next)
+  }
+
   function updateExtra<K extends keyof Draft>(key: K, value: Draft[K]) {
     const next = { ...draft, [key]: value }
     setDraft(next)
@@ -231,10 +300,17 @@ function HabitCardEditor({
   const quantityId = `qty-${item.habit_id}`
   const reasonId = `reason-${item.habit_id}`
   const noteId = `note-${item.habit_id}`
+  const labels = valueLabels(item)
+  const answer = savedEntry === null ? null : draft.value ?? savedEntry.value
 
   return (
     <div
-      role="group" aria-label={item.name}
+      role="group"
+      aria-label={
+        tracksValue && item.direction !== null
+          ? `${item.name}. Направление: ${DIRECTION_LABEL[item.direction]}`
+          : item.name
+      }
       {...readiness.focusProps}
       className={[
         'ccard',
@@ -249,18 +325,38 @@ function HabitCardEditor({
     >
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="ccard__head">
-        <span className="ccard__name" title={`${item.name} · ${scheduleLabel(item.schedule)}`}>
+        {/*
+         * The tooltip carries the whole configuration the day was answered
+         * with: the schedule, the importance the user set, and — for a value
+         * habit — which end of the scale is good. All three are metadata about
+         * the habit, never a verdict on a single answer.
+         */}
+        <span
+          className="ccard__name"
+          title={[
+            scheduleLabel(item.schedule),
+            `Важность: ${importanceLabel(item.importance)}`,
+            item.direction === null ? null : DIRECTION_LABEL[item.direction],
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        >
           <span
             className="swatch swatch--small"
             style={{ backgroundColor: item.area.color }}
             aria-hidden="true"
           />
           <span className="ccard__name-text" title={scheduleLabel(item.schedule)}>{item.name}</span>
+          {item.importance !== 'normal' ? (
+            <span className="badge badge--muted" title={`Важность: ${importanceLabel(item.importance)}`}>
+              {item.importance === 'high' ? 'высокая' : 'низкая'}
+            </span>
+          ) : null}
           {item.is_archived ? (
             <span className="badge badge--muted">архив</span>
           ) : null}
         </span>
-        <StatusPill entry={savedEntry} />
+        <StatusPill entry={savedEntry} item={item} />
         {/*
          * The clear control belongs to the recorded state, so it sits with the
          * status pill instead of the status buttons. The button row is exactly
@@ -279,31 +375,63 @@ function HabitCardEditor({
         ) : null}
       </div>
 
-      {/* ── Status buttons ─────────────────────────────────── */}
-      <div className="ccard__actions" role="group" aria-label="Отметка привычки">
-        {DAILY_STATUS_OPTIONS.map((option) => {
-          const blocked = isFuture && option.value !== 'skipped'
-          const isSelected = draft.status === option.value
-          return (
-            <button
-              key={option.value}
-              type="button"
-              className={`ccard__status-btn${isSelected ? ' ccard__status-btn--active' : ''}`}
-              aria-pressed={isSelected}
-              aria-label={statusActionLabel(option.value, isFuture)}
-              disabled={blocked}
-              title={
-                blocked
-                  ? 'Для будущей даты доступен только запланированный пропуск'
-                  : statusActionLabel(option.value, isFuture)
-              }
-              onClick={() => chooseStatus(option.value)}
-            >
-              {option.value === 'skipped' ? 'Пропуск' : statusActionLabel(option.value, isFuture)}
-            </button>
-          )
-        })}
-      </div>
+      {/*
+       * ── The answer ───────────────────────────────────────
+       *
+       * A habit answered on a value scale (да/нет, 0…3) shows exactly the words
+       * the user configured. It is never asked for a completion or a skip: its
+       * question is "how much", not "did it happen".
+       */}
+      {tracksValue ? (
+        <div className="ccard__segments" role="group" aria-label="Значение">
+          {valueOptions(item).map((value) => {
+            const selected = answer === value
+            return (
+              <button
+                key={value}
+                type="button"
+                className={`ccard__seg-btn${selected ? ' ccard__seg-btn--active' : ''}`}
+                aria-pressed={selected}
+                disabled={isFuture}
+                title={
+                  isFuture ? 'Будущий день нельзя отметить заранее' : labels[value]
+                }
+                onClick={() => chooseValue(value)}
+              >
+                {labels[value]}
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
+
+      {/* ── Status buttons (completion habits only) ────────── */}
+      {tracksValue ? null : (
+        <div className="ccard__actions" role="group" aria-label="Отметка привычки">
+          {DAILY_STATUS_OPTIONS.map((option) => {
+            const blocked = isFuture && option.value !== 'skipped'
+            const isSelected = draft.status === option.value
+            return (
+              <button
+                key={option.value}
+                type="button"
+                className={`ccard__status-btn${isSelected ? ' ccard__status-btn--active' : ''}`}
+                aria-pressed={isSelected}
+                aria-label={statusActionLabel(option.value, isFuture)}
+                disabled={blocked}
+                title={
+                  blocked
+                    ? 'Для будущей даты доступен только запланированный пропуск'
+                    : statusActionLabel(option.value, isFuture)
+                }
+                onClick={() => chooseStatus(option.value)}
+              >
+                {option.value === 'skipped' ? 'Пропуск' : statusActionLabel(option.value, isFuture)}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/*
        * Quantity stays in its own row, but a habit that tracks a quantity
@@ -311,7 +439,7 @@ function HabitCardEditor({
        * after a status was chosen used to add a whole row the moment the user
        * marked the habit, which shoved every card below it downwards.
        */}
-      {tracksQuantity ? (
+      {tracksQuantity && !tracksValue ? (
         <div className="ccard__extra">
           <input
             id={quantityId}
@@ -342,7 +470,7 @@ function HabitCardEditor({
        * this row too, so revealing it cannot change the card's height either.
        */}
       <div className="ccard__footer">
-        {draft.status === 'skipped' ? (
+        {!tracksValue && draft.status === 'skipped' ? (
           <input
             id={reasonId}
             aria-label="Причина пропуска"
@@ -360,7 +488,7 @@ function HabitCardEditor({
           placeholder="Заметка (необязательно)"
           maxLength={500}
           value={draft.note}
-          disabled={draft.status === null}
+          disabled={tracksValue ? draft.value === null : draft.status === null}
           onChange={(e) => updateExtra('note', e.target.value)}
         />
         {showOk ? (

@@ -80,6 +80,31 @@
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
 }
 
+/* -- Spheres of the day (Тело, Развитие, Досуг, Питание и вещества) --------- */
+
+.checkin-group {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.checkin-group__title {
+  margin: 6px 2px 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.checkin-group__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 8px;
+  align-items: start;
+}
+
 /* "All done" banner */
 .checkin-grid__complete {
   display: flex;

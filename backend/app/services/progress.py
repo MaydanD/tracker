@@ -30,7 +30,10 @@ def histories_from_loaded(
 ) -> tuple[HabitHistory, ...]:
     """Shared history adapter, also used by bounded analytics range loading."""
     entries: dict[int, dict[date, str]] = {}
+    values: dict[int, dict[date, int]] = {}
     for entry in loaded_entries:
+        if entry.value is not None:
+            values.setdefault(entry.habit_id, {})[entry.entry_date] = entry.value
         entries.setdefault(entry.habit_id, {})[entry.entry_date] = entry.status
     histories: list[HabitHistory] = []
     for habit in habits:
@@ -49,9 +52,18 @@ def histories_from_loaded(
         histories.append(HabitHistory(
             habit_id=habit.id,
             versions=tuple(
-                Version(v.effective_from, v.name, v.weight, v.schedule, v.area_id)
+                Version(
+                    effective_from=v.effective_from,
+                    name=v.name,
+                    weight=v.weight,
+                    schedule=v.schedule,
+                    area_id=v.area_id,
+                    tracks_value=v.tracks_value,
+                    value_type=v.value_type, direction=v.direction,
+                )
                 for v in habit.versions
             ),
             entries=entries.get(habit.id, {}), archived_on=archived_on,
+            values=values.get(habit.id, {}),
         ))
     return tuple(histories)

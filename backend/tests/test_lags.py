@@ -258,6 +258,23 @@ def test_normalization_and_all_request_limits():
             request_variables(start, end, keys)
 
 
+def test_request_variables_resolves_a_habit_value_scale_key():
+    """A recorded scale answer is a habit variable like any other.
+
+    The guardrail sweep asks for `habit.<id>.daily.value` for the habits that
+    answer on a scale, so resolving that key must not require knowing which
+    habits those are — the loaded dataset decides it. An invented field is still
+    rejected here.
+    """
+    x, y = request_variables(MON, MON, ("habit.7.daily.value", "state.mood"))
+    assert x.key == "habit.7.daily.value"
+    assert x.grain is Grain.DAILY
+    assert x.type is T.ORDINAL
+    assert y.key == "state.mood"
+    with pytest.raises(ValueError):
+        request_variables(MON, MON, ("habit.7.daily.nonsense", "state.mood"))
+
+
 @pytest.mark.parametrize("on", [date.min, date.max])
 def test_lag_zero_at_date_extremes_serializes_finite(on):
     data = dataset(on, on, today=on)

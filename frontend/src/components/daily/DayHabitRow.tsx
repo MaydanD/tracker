@@ -5,7 +5,7 @@ import { deleteDailyEntry, saveDailyEntry } from '../../api/daily'
 import type { DailyEntry, DailyEntryInput, DayItem, EntryStatus, HabitStreak, WeekHabitProgress } from '../../api/types'
 import { HabitWeekLabel, StreakLabel } from './ProgressSummary'
 import { ErrorBanner } from '../Feedback'
-import { scheduleLabel, unitLabel, weightLabel } from '../habits/options'
+import { importanceLabel, scheduleLabel, unitLabel } from '../habits/options'
 import { DAILY_STATUS_OPTIONS, NO_ENTRY_LABEL, statusActionLabel, statusLabel } from './status'
 
 /** Local draft of the row. `status === null` means the day has no record. */
@@ -216,7 +216,7 @@ export function DayHabitRow({
 
       <div className="day-row__meta">
         <span className="pill">{item.area.name}</span>
-        <span className="pill">Важность {item.weight} · {weightLabel(item.weight)}</span>
+        <span className="pill">Важность: {importanceLabel(item.importance)}</span>
         <span className="pill">{scheduleLabel(item.schedule)}</span>
         {tracksQuantity ? (
           <span className="pill">

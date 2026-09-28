@@ -84,6 +84,32 @@ async function counting(name: string) {
 }
 
 describe('independent check-in card lifecycle', () => {
+  it('treats a value habit with a legacy completion row as unanswered, and a recorded 0 as an answer', async () => {
+    api()
+    const items = [
+      dayItemFixture({ habit_id: 1, name: 'Чтение', value_type: 'ordinal_4',
+        value_labels: ['0', 'мало', 'нормально', 'много'], direction: 'positive',
+        entry: dailyEntryFixture({ habit_id: 1, value: null }) }),
+      dayItemFixture({ habit_id: 2, name: 'Игры', value_type: 'ordinal_4',
+        value_labels: ['0', 'мало', 'нормально', 'много'], direction: 'negative',
+        entry: dailyEntryFixture({ habit_id: 2, value: 0 }) }),
+    ]
+    render(<StrictMode><CheckInGrid items={items} entryDate={DATE} isFuture={false}
+      onChanged={vi.fn()} includeDailyState={false} groupByArea /></StrictMode>)
+    await screen.findByText('Чтение')
+    // The row says "done" but holds no value: the habit is still unanswered and
+    // must stay open instead of hiding under «Уже отмечено».
+    expect(screen.getByRole('group', { name: /Чтение/, hidden: true }).closest('details')).toBeNull()
+    const open = screen.getByRole('group', { name: /Чтение/, hidden: true })
+    // The scale is offered, with nothing selected: the day still needs an answer.
+    expect(within(open).getByRole('button', { name: 'много', hidden: true })).toBeInTheDocument()
+    expect(within(open).queryAllByRole('button', { hidden: true })
+      .filter(button => button.getAttribute('aria-pressed') === 'true')).toHaveLength(0)
+    // Zero is a real answer, never a missing one.
+    expect(screen.getByRole('group', { name: /Игры/, hidden: true }).closest('details')).not.toBeNull()
+    expect(screen.getByText('Уже отмечено · 1')).toBeInTheDocument()
+  })
+
   it('hovering back cancels completion and a second departure starts a full five seconds', async () => {
     api(); grid(); await loaded()
     press('Чтение', 'Выполнено'); await saved('Чтение')

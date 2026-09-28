@@ -1,4 +1,11 @@
-"""Frozen v1 wire contract. Never derive an old backup schema from live ORM columns."""
+"""Frozen wire contracts. Never derive an old backup schema from live ORM columns.
+
+``v1`` is the habit schema before habits could be answered with a value, and it
+stays readable forever: restoring it fills the columns it predates with their
+safe defaults (no key, no value scale, no recorded value). ``v2`` describes the
+same seven tables *with* those columns, so a round trip never loses a scale, its
+labels, a direction, an importance or a recorded ``0``.
+"""
 
 from datetime import date, datetime
 import re
@@ -152,6 +159,48 @@ class BackupDataV1(StrictModel):
     insight_snapshots: list[SnapshotRow]
 
 
+# -- format v2: habits that can be answered with a value ---------------------
+
+
+class AreaRowV2(AreaRow):
+    """Adds the stable shipped key and the display position."""
+
+    key: Annotated[str, Field(min_length=1, max_length=64)] | None
+    sort_order: Nonnegative
+
+
+class HabitRowV2(HabitRow):
+    """Adds the stable shipped key and the display position."""
+
+    key: Annotated[str, Field(min_length=1, max_length=64)] | None
+    sort_order: Nonnegative
+
+
+class VersionRowV2(VersionRow):
+    importance: Literal["low", "normal", "high"] = "normal"
+
+    """Adds the value scale of the habit, its labels and its direction."""
+
+    value_type: Literal["binary", "ordinal_4"] | None
+    value_labels: list[Annotated[str, Field(min_length=1, max_length=40)]] | None
+    direction: Literal["positive", "negative", "neutral"] | None
+
+
+class EntryRowV2(EntryRow):
+    """Adds the recorded answer of a value-tracked habit (``0`` is an answer)."""
+
+    value: Annotated[int, Field(ge=0, le=3)] | None
+
+
+class BackupDataV2(BackupDataV1):
+    """Format v2: the same tables, with the columns value scales introduced."""
+
+    areas: list[AreaRowV2]
+    habits: list[HabitRowV2]
+    habit_versions: list[VersionRowV2]
+    habit_entries: list[EntryRowV2]
+
+
 class ManifestV1(StrictModel):
     format: Literal["tracker-backup"]
     version: Literal[1]
@@ -161,7 +210,17 @@ class ManifestV1(StrictModel):
     counts: dict[str, Nonnegative]
 
 
+class ManifestV2(StrictModel):
+    format: Literal["tracker-backup"]
+    version: Literal[2]
+    created_at: datetime
+    alembic_revision: str
+    application_backup_version: Literal[2]
+    counts: dict[str, Nonnegative]
+
+
 class BackupPreview(StrictModel):
-    manifest: ManifestV1
+    # A preview echoes whichever format version the archive declared.
+    manifest: ManifestV1 | ManifestV2
     validation_token: str
     expires_in_seconds: int

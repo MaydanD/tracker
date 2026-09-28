@@ -99,6 +99,9 @@ class HabitMetadata:
     area_name: str
     is_archived: bool
     weight: int
+    value_type: str | None = None
+    importance: str = "normal"
+    direction: str | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -118,7 +121,8 @@ def load_habit_metadata(session: Session) -> dict[int, HabitMetadata]:
         metadata[habit.id] = HabitMetadata(
             habit_id=habit.id, name=version.name, area_id=version.area_id,
             area_name=area.name if area is not None else "", is_archived=habit.is_archived,
-            weight=version.weight)
+            weight=version.weight, value_type=version.value_type,
+            importance=version.importance, direction=version.direction)
     return metadata
 
 
@@ -160,7 +164,8 @@ def get_catalogue(session: Session) -> InsightCatalogue:
         _registry_only_dataset(metadata), habit_ids=_ordered_habit_ids(metadata),
         budget=DISCOVERY_POLICY.default_variable_budget)
     variables = []
-    for variable in registry(tuple(sorted(metadata))):
+    for variable in registry(tuple(sorted(metadata)), tuple(
+            h.habit_id for h in metadata.values() if h.value_type is not None)):
         habit = metadata.get(variable.habit_id) if variable.habit_id is not None else None
         variables.append(InsightVariable(
             key=variable.key,
@@ -193,7 +198,8 @@ def _registry_only_dataset(metadata: Mapping[int, HabitMetadata]):
     from app.domain.analytics.variables import registry
 
     return AnalyticsDataset(contract_version="registry", start=date.min, end=date.min,
-                            today=date.min, variables=registry(tuple(sorted(metadata))),
+                            today=date.min, variables=registry(tuple(sorted(metadata)), tuple(
+                                h.habit_id for h in metadata.values() if h.value_type is not None)),
                             daily=(), weekly=())
 
 

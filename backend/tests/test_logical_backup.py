@@ -16,6 +16,7 @@ from sqlalchemy import event, text
 from app.core.config import Settings
 from app.db.models import AppMetadata
 from app.main import create_app
+from app.schemas.backup import BackupDataV1
 from app.services import backup, habits
 from tests.helpers import FrozenClock, run_migrations
 from tests.test_records_api import seed, TODAY, MON
@@ -24,7 +25,22 @@ from tests.test_progress_api import config
 
 @pytest.fixture
 def payload():
+    return json.loads((Path(__file__).parent / "fixtures/backup-v2.json").read_text(encoding="utf-8"))
+
+
+@pytest.fixture
+def v1_payload():
     return json.loads((Path(__file__).parent / "fixtures/backup-v1.json").read_text(encoding="utf-8"))
+
+
+def v1_expected(data):
+    """A v1 snapshot as the current reader restores it.
+
+    Built by the same lift the service applies, so the test states "an old archive
+    restores as the data it holds" instead of restating the columns it predates.
+    """
+    lifted = backup.lift_v1(BackupDataV1.model_validate(data))
+    return json.loads(backup.json_bytes(lifted.model_dump(mode="json")))
 
 
 def pack(payload):
@@ -48,12 +64,63 @@ def canonical(database):
     return json.loads(backup.json_bytes(backup.read_snapshot(database)))
 
 
-def test_frozen_v1_fixture_restore(client, app, payload):
-    response = apply(client, pack(payload))
+def test_frozen_v1_fixture_restore(client, app, v1_payload):
+    """An old v1 archive still restores; the columns it predates stay empty."""
+    response = apply(client, pack(v1_payload))
     assert response.status_code == 200, response.text
-    assert canonical(app.state.database) == payload["data"]
+    assert canonical(app.state.database) == v1_expected(v1_payload["data"])
     assert client.get("/api/records").json()["summary"]["habit_completions"] == 1
     assert client.get("/api/backup").headers["content-type"] == "application/zip"
+
+
+def test_v2_roundtrip_preserves_value_scales_and_importance(client, app, payload):
+    """Export → restore keeps the scale, the labels, the answer and the importance."""
+    response = apply(client, pack(payload))
+    assert response.status_code == 200, response.text
+    snapshot = canonical(app.state.database)
+    assert snapshot == payload["data"]
+    entry = snapshot["habit_entries"][0]
+    assert entry["value"] == 2  # a recorded answer, not "missing"
+    version = snapshot["habit_versions"][0]
+    assert version["value_type"] == "ordinal_4"
+    assert version["value_labels"] == ["0", "мало", "нормально", "много"]
+    assert version["direction"] == "positive"
+    assert version["weight"] == 2
+    assert version["importance"] == "normal"
+    assert snapshot["habits"][0]["key"] == "body.walk"
+
+
+def test_a_v2_archive_written_at_the_previous_revision_still_restores(client, app, payload):
+    """The revision guard accepts a v2 archive from either revision of the v2 format.
+
+    Importance became an independent column after the value scales landed, so an
+    archive written in between declares the older revision. It holds the same
+    columns, so restoring it must keep working rather than be rejected.
+    """
+    payload["manifest"]["alembic_revision"] = "5824a510506e"
+    response = apply(client, pack(payload))
+    assert response.status_code == 200, response.text
+    snapshot = canonical(app.state.database)
+    assert snapshot["habit_versions"][0]["importance"] == "normal"
+    assert snapshot["habit_versions"][1]["weight"] == 3
+    assert snapshot["habit_entries"][0]["value"] == 2
+
+
+def test_restored_importance_and_scale_are_readable_through_the_api(client, app, payload):
+    """A restored habit reports the same importance and scale history it was given."""
+    assert apply(client, pack(payload)).status_code == 200
+
+    # The habit's current configuration is its newest version: high importance.
+    habit = client.get("/api/habits/1").json()
+    assert habit["importance"] == "high"
+    assert habit["weight"] == 3
+    assert habit["value_labels"] == ["0", "мало", "нормально", "много"]
+    assert habit["direction"] == "positive"
+
+    # Newest first: the later version raised the importance from normal to high.
+    history = client.get("/api/habits/1/versions").json()
+    assert [row["importance"] for row in history] == ["high", "normal"]
+    assert [row["weight"] for row in history] == [3, 2]
 
 
 def test_roundtrip_two_databases_records_history_experiments(client, app, session, health_area, tmp_path):
@@ -131,7 +198,9 @@ def test_download_export_headers_read_only_no_secrets(client, app, session, payl
             queries.clear()
             response = client.get(path)
             assert response.status_code == 200
-            assert len(queries) == 7
+            # One select per backed-up table, plus the backup path's extra
+            # metadata read.
+            assert len(queries) == (8 if path == '/api/backup' else 7)
             assert response.headers["content-type"] == content_type
             assert response.headers["content-disposition"].endswith(extension + '"')
             assert response.headers["cache-control"] == "no-store"
@@ -161,6 +230,7 @@ def test_download_export_headers_read_only_no_secrets(client, app, session, payl
     'coercion', 'bool_id', 'overflow', 'counts', 'version_bool', 'null_required', 'duplicate_day',
     'duplicate_snapshot', 'history', 'missing_history', 'schedule', 'state_consistency',
     'experiment_dates', 'skip', 'timestamp_precision', 'timestamp_offset', 'snapshot_enum',
+    'importance', 'value_range', 'value_missing', 'labels', 'direction',
 ])
 def test_invalid_payloads_are_rejected_without_writes(client, app, payload, change):
     data = payload['data']
@@ -192,6 +262,11 @@ def test_invalid_payloads_are_rejected_without_writes(client, app, payload, chan
     elif change == 'timestamp_precision': data['habits'][0]['created_at'] += '7'
     elif change == 'timestamp_offset': data['habits'][0]['created_at'] += '+03:00'
     elif change == 'snapshot_enum': data['insight_snapshots'][0]['confidence'] = 'certain'
+    elif change == 'importance': data['habit_versions'][0]['importance'] = 'urgent'
+    elif change == 'value_range': data['habit_entries'][0]['value'] = 5
+    elif change == 'value_missing': data['habit_entries'][0]['value'] = None
+    elif change == 'labels': data['habit_versions'][0]['value_labels'] = ['0', 'мало', 'много']
+    elif change == 'direction': data['habit_versions'][0]['direction'] = 'excellent'
     if change != 'counts':
         payload['manifest']['counts'] = {name: len(rows) for name, rows in data.items()}
     before = canonical(app.state.database)
@@ -210,7 +285,7 @@ def test_corrupt_and_unsafe_archives(client, payload, kind):
         with zipfile.ZipFile(output, 'w', zipfile.ZIP_STORED) as archive:
             manifest_name = '../manifest.json' if kind == 'traversal' else 'data.json' if kind == 'duplicate_name' else 'other.json' if kind == 'missing_manifest' else 'manifest.json'
             manifest = backup.json_bytes(payload['manifest'])
-            if kind == 'duplicate_json': manifest = manifest.replace(b'"version": 1', b'"version": 1, "version": 1')
+            if kind == 'duplicate_json': manifest = manifest.replace(b'"version": 2', b'"version": 2, "version": 2')
             archive.writestr(manifest_name, manifest)
             data = b'{' if kind == 'invalid_json' else backup.json_bytes(payload['data'])
             if kind == 'nan': data = data.replace(b'0.9', b'NaN')
@@ -255,10 +330,10 @@ def test_csv_formula_safety_and_empty_tables(payload):
 
 def test_every_domain_table_and_column_accounted_for():
     from app.db.base import Base
-    from app.schemas.backup import BackupDataV1
+    from app.schemas.backup import BackupDataV2
     assert set(Base.metadata.tables) == {table.name for table in backup.TABLES.values()} | {'app_metadata'}
     for section, table in backup.TABLES.items():
-        row_type = BackupDataV1.model_fields[section].annotation.__args__[0]
+        row_type = BackupDataV2.model_fields[section].annotation.__args__[0]
         assert set(row_type.model_fields) == set(table.c.keys())
 
 

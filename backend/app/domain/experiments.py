@@ -195,7 +195,7 @@ class OverallPeriod:
     coverage: PeriodCoverage
     mean_score: float | None
     scored_days: int
-    completed_weight: int
+    completed_weight: float
     required_weight: int
 
 
@@ -332,7 +332,7 @@ def _overall(window: ExperimentWindow, rows: list, today: date,
     past = [row for row in rows if row.date <= today]
     scores = [row.values["daily.score"].value for row in past
               if row.values["daily.score"].availability == A.PRESENT]
-    done = sum(int(row.values["daily.completed_weight"].value or 0) for row in past
+    done = sum(float(row.values["daily.completed_weight"].value or 0) for row in past
                if row.values["daily.completed_weight"].availability == A.PRESENT)
     required = sum(int(row.values["daily.required_weight"].value or 0) for row in past
                    if row.values["daily.required_weight"].availability == A.PRESENT)

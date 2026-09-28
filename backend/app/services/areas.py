@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.time import utc_now
 from app.db.models import Area
-from app.db.queries import active_habits_in_area
+from app.db.queries import active_habits_in_area, order_key
 from app.domain.areas import area_name_key, normalise_area_color, normalise_area_name
 from app.domain.errors import (
     AreaHasActiveHabitsError,
@@ -26,9 +26,12 @@ def list_areas(session: Session, *, include_archived: bool = False) -> list[Area
     if not include_archived:
         statement = statement.where(Area.is_archived.is_(False))
     areas = list(session.scalars(statement))
-    # Case-insensitive ordering, done in Python because the dataset is a handful
-    # of rows and SQLite's default collation is not case-insensitive.
-    return sorted(areas, key=lambda area: area.name.casefold())
+    # Ordering is done in Python because the dataset is a handful of rows and
+    # SQLite's default collation is not case-insensitive. Areas with a position
+    # of their own (the shipped spheres) come first, in that order.
+    return sorted(
+        areas, key=lambda area: order_key(sort_order=area.sort_order, name=area.name)
+    )
 
 
 def get_area(session: Session, area_id: int) -> Area:

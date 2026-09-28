@@ -7,6 +7,7 @@ import type {
   Habit,
   HabitInput,
   HabitVersion,
+  Importance,
 } from '../api/types'
 import { localTodayIso } from '../components/daily/dates'
 import { jsonResponse, stubApi, type StubHandler, type StubRequest } from './fetchStub'
@@ -19,9 +20,10 @@ import { progressFixture } from './progressFixture'
  * It covers the happy paths the pages drive (list with filters, create, update,
  * archive, unarchive, history, and the day screen). It does *not* try to be a
  * second server: only the rules the screens genuinely depend on are mirrored —
- * one record per habit and date, the future-date rule, and the skip-reason and
- * quantity rules. Tests that need the UI to handle a specific rejection stub that
- * response explicitly instead.
+ * one record per habit and date, the future-date rule, the skip-reason and
+ * quantity rules, and the rule that a value habit is answered with a value while
+ * a completion habit is answered with a status. Tests that need the UI to handle
+ * a specific rejection stub that response explicitly instead.
  */
 export interface FakeApi {
   areas: Area[]
@@ -60,6 +62,11 @@ export function createFakeApi(options: FakeApiOptions = {}): FakeApi {
     nextAreaId: 100,
     nextHabitId: 100,
     nextEntryId: 100,
+    // Display order, the way the backend keeps it: the order the habits arrived
+    // in (the canonical manifest order in the fixtures), then new ones after.
+    order: new Map<number, number>(
+      (options.habits ?? []).map((habit, index) => [habit.id, index]),
+    ),
   }
 
   const findArea = (id: number): Area | undefined =>
@@ -73,6 +80,7 @@ export function createFakeApi(options: FakeApiOptions = {}): FakeApi {
   const replaceHabit = (habit: Habit): void => {
     state.habits = state.habits.map((entry) => (entry.id === habit.id ? habit : entry))
   }
+  const displayOrder = (habit: Habit): number => state.order.get(habit.id) ?? Number.MAX_SAFE_INTEGER
 
   function areaRoutes(
     method: string,
@@ -155,10 +163,7 @@ export function createFakeApi(options: FakeApiOptions = {}): FakeApi {
         state.habits
           .filter((habit) => includeArchived || !habit.is_archived)
           .filter((habit) => areaId === null || habit.area_id === Number(areaId))
-          .sort(
-            (a, b) =>
-              a.area.name.localeCompare(b.area.name) || a.name.localeCompare(b.name),
-          ),
+          .sort((a, b) => displayOrder(a) - displayOrder(b)),
       )
     }
 
@@ -166,8 +171,10 @@ export function createFakeApi(options: FakeApiOptions = {}): FakeApi {
       const input = request.body as HabitInput
       const area = findArea(input.area_id)
       if (!area) return notFound('area_not_found', 'That area does not exist.')
+      const newId = state.nextHabitId++
+      state.order.set(newId, state.order.size)
       const habit = habitFixture({
-        id: state.nextHabitId++,
+        id: newId,
         ...configFromInput(input, area),
       })
       state.habits = [...state.habits, habit]
@@ -230,22 +237,23 @@ export function createFakeApi(options: FakeApiOptions = {}): FakeApi {
           !habit.is_archived ||
           findEntry(habit.id, entryDate) !== undefined,
       )
+      .sort((a, b) => displayOrder(a) - displayOrder(b))
       .map((habit) => ({
         habit_id: habit.id,
         name: habit.name,
         area: habit.area,
+        importance: habit.importance,
         weight: habit.weight,
         tracking_mode: habit.tracking_mode,
         quantity_unit: habit.quantity_unit,
         quantity_allows_decimal: habit.quantity_allows_decimal,
+        value_type: habit.value_type,
+        value_labels: habit.value_labels,
+        direction: habit.direction,
         schedule: habit.schedule,
         is_archived: habit.is_archived,
         entry: findEntry(habit.id, entryDate) ?? null,
       }))
-      .sort(
-        (a, b) =>
-          a.area.name.localeCompare(b.area.name) || a.name.localeCompare(b.name),
-      )
 
     const day: DayState = {
       entry_date: entryDate,
@@ -272,6 +280,46 @@ export function createFakeApi(options: FakeApiOptions = {}): FakeApi {
 
     const today = localTodayIso()
     const status = input.status
+    const note = (input.note ?? '').trim()
+    const tracksValue = habit.value_type !== null
+
+    if (tracksValue) {
+      // A value habit is answered in exactly one way: a value on its own scale,
+      // recorded as a completed day.
+      if (status !== 'done') {
+        return unprocessable(
+          'unsupported_entry_for_value_habit',
+          'A habit with a value scale is answered with its value.',
+        )
+      }
+      const value = input.value ?? null
+      const max = habit.value_type === 'binary' ? 1 : 3
+      if (value === null || !Number.isInteger(value) || value < 0 || value > max) {
+        return unprocessable('invalid_habit_value', 'The value is not valid for its scale.')
+      }
+      const existing = findEntry(habitId, entryDate)
+      const entry: DailyEntry = {
+        id: existing?.id ?? state.nextEntryId++,
+        habit_id: habitId,
+        entry_date: entryDate,
+        status: 'done',
+        value,
+        quantity_value: null,
+        quantity_unit: null,
+        skip_reason: null,
+        note: note === '' ? null : note,
+        created_at: existing?.created_at ?? stamp(),
+        updated_at: stamp(),
+      }
+      state.entries = [
+        ...state.entries.filter(
+          (candidate) =>
+            candidate.habit_id !== habitId || candidate.entry_date !== entryDate,
+        ),
+        entry,
+      ]
+      return jsonResponse(entry)
+    }
 
     if (entryDate > today && status !== 'skipped') {
       return unprocessable(
@@ -304,13 +352,13 @@ export function createFakeApi(options: FakeApiOptions = {}): FakeApi {
       }
     }
 
-    const note = (input.note ?? '').trim()
     const existing = findEntry(habitId, entryDate)
     const entry: DailyEntry = {
       id: existing?.id ?? state.nextEntryId++,
       habit_id: habitId,
       entry_date: entryDate,
       status,
+      value: null,
       quantity_value: quantity,
       quantity_unit: habit.quantity_unit,
       skip_reason: status === 'skipped' ? reason : null,
@@ -423,11 +471,17 @@ export function stubFakeApi(api: FakeApi) {
   return stubApi({}, { fallback: api.handle })
 }
 
+function importanceOf(input: HabitInput): Importance {
+  if (input.importance !== undefined) return input.importance
+  return 'normal'
+}
+
 function configFromInput(
   input: HabitInput,
   area: Area,
 ): Partial<Habit> & { area_id: number } {
   const quantity = input.tracking_mode === 'binary_quantity'
+  const importance = importanceOf(input)
   return {
     name: input.name,
     description: input.description ?? null,
@@ -438,10 +492,14 @@ function configFromInput(
       color: area.color,
       is_archived: area.is_archived,
     },
-    weight: input.weight,
+    importance,
+    weight: input.weight ?? 1,
     tracking_mode: input.tracking_mode,
     quantity_unit: quantity ? (input.quantity_unit ?? null) : null,
     quantity_allows_decimal: quantity ? (input.quantity_allows_decimal ?? false) : false,
+    value_type: input.value_type ?? null,
+    value_labels: input.value_type ? (input.value_labels ?? null) : null,
+    direction: input.value_type ? (input.direction ?? 'neutral') : null,
     schedule: scheduleReadFromInput(input),
   }
 }
@@ -494,10 +552,14 @@ function versionsOf(habit: Habit): HabitVersion[] {
       description: habit.description,
       area_id: habit.area_id,
       area: habit.area,
+      importance: habit.importance,
       weight: habit.weight,
       tracking_mode: habit.tracking_mode,
       quantity_unit: habit.quantity_unit,
       quantity_allows_decimal: habit.quantity_allows_decimal,
+      value_type: habit.value_type,
+      value_labels: habit.value_labels,
+      direction: habit.direction,
       schedule: habit.schedule,
     },
     {
@@ -509,10 +571,14 @@ function versionsOf(habit: Habit): HabitVersion[] {
       description: null,
       area_id: habit.area_id,
       area: habit.area,
+      importance: 'normal',
       weight: 1,
       tracking_mode: 'binary',
       quantity_unit: null,
       quantity_allows_decimal: false,
+      value_type: null,
+      value_labels: null,
+      direction: null,
       schedule: habit.schedule,
     },
   ]

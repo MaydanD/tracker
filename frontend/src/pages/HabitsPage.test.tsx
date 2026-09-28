@@ -10,8 +10,10 @@ const health = areaFixture({ id: 1, name: 'Health', color: '#2f9e5f' })
 const development = areaFixture({ id: 2, name: 'Development', color: '#4a7cc7' })
 
 // Radio labels include their hint text, so match on the start of the label.
-const BINARY = /^Отметка выполнения/
-const QUANTITY = /^Отметка и количество/
+const BINARY = /^Выполнено \/ пропущено/
+const QUANTITY = /^Выполнено и количество/
+const VALUE_TWO = /^Да \/ нет/
+const VALUE_FOUR = /^Шкала из четырёх значений/
 const WEEKDAYS = /^По дням недели/
 const TIMES_PER_WEEK = /^Несколько раз в неделю/
 
@@ -151,7 +153,8 @@ describe('HabitsPage', () => {
 
     expect(await screen.findByText('Reading')).toBeInTheDocument()
     expect(screen.getByText('Exercise')).toBeInTheDocument()
-    expect(screen.getByText('Важность 2 · Важная')).toBeInTheDocument()
+    // Both habits are ordinary: importance is `normal` unless the user changes it.
+    expect(screen.getAllByText('Важность: Обычная')).toHaveLength(2)
     expect(screen.getByText('Количество (pages)')).toBeInTheDocument()
     expect(screen.getByText('Пн, Ср, Пт (3 раза в неделю)')).toBeInTheDocument()
     expect(screen.getAllByText(/Версия 1 с 01.09.2026/).length).toBeGreaterThan(0)
@@ -355,13 +358,112 @@ describe('HabitsPage', () => {
 
     expect(screen.getByLabelText('Название')).toHaveValue('Reading')
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Deep reading' } })
-    fireEvent.change(screen.getByLabelText('Важность'), { target: { value: '3' } })
+    fireEvent.change(screen.getByLabelText('Важность'), { target: { value: 'high' } })
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить изменения' }))
 
     expect(await screen.findByText('Deep reading')).toBeInTheDocument()
-    expect(api.habits[0]?.weight).toBe(3)
+    expect(api.habits[0]?.importance).toBe('high')
+    expect(api.habits[0]?.weight).toBe(1)
     expect(api.habits[0]?.current_version.version_number).toBe(2)
-    expect(screen.getByText('Важность 3 · Ключевая')).toBeInTheDocument()
+    expect(screen.getByText('Важность: Высокая')).toBeInTheDocument()
+  })
+
+  it('creates a habit with an ordinary importance by default', async () => {
+    const api = createFakeApi({ areas: [health] })
+    stubFakeApi(api)
+
+    render(<HabitsPage />)
+    await openCreateForm()
+
+    expect(screen.getByLabelText('Важность')).toHaveValue('normal')
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Reading' } })
+    chooseArea(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Создать привычку' }))
+
+    await waitFor(() => expect(api.habits).toHaveLength(1))
+    expect(api.habits[0]?.importance).toBe('normal')
+    expect(api.habits[0]?.weight).toBe(1)
+  })
+
+  it('creates a habit answered on its own value scale', async () => {
+    const api = createFakeApi({ areas: [health] })
+    stubFakeApi(api)
+
+    render(<HabitsPage />)
+    await openCreateForm()
+
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Настроение' } })
+    chooseArea(1)
+    chooseSchedule(VALUE_FOUR)
+
+    // Every word of the scale is the user's own, and one field holds one word.
+    const words = ['ужас', 'плохо', 'норм', 'хорошо']
+    words.forEach((word, index) => {
+      fireEvent.change(screen.getByLabelText(`Значение ${index}`), {
+        target: { value: word },
+      })
+    })
+    fireEvent.change(screen.getByLabelText('Направление'), { target: { value: 'negative' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Создать привычку' }))
+
+    await waitFor(() => expect(api.habits).toHaveLength(1))
+    expect(api.habits[0]?.value_type).toBe('ordinal_4')
+    expect(api.habits[0]?.value_labels).toEqual(words)
+    expect(api.habits[0]?.direction).toBe('negative')
+    expect(api.habits[0]?.tracking_mode).toBe('binary')
+    expect(await screen.findByText('Ответ: шкала 0–3')).toBeInTheDocument()
+  })
+
+  it('creates a two-value habit with the да / нет words', async () => {
+    const api = createFakeApi({ areas: [health] })
+    stubFakeApi(api)
+
+    render(<HabitsPage />)
+    await openCreateForm()
+
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Зарядка' } })
+    chooseArea(1)
+    chooseSchedule(VALUE_TWO)
+    fireEvent.click(screen.getByRole('button', { name: 'Создать привычку' }))
+
+    await waitFor(() => expect(api.habits).toHaveLength(1))
+    expect(api.habits[0]?.value_type).toBe('binary')
+    expect(api.habits[0]?.value_labels).toEqual(['нет', 'да'])
+    expect(api.habits[0]?.direction).toBe('neutral')
+    expect(await screen.findByText('Ответ: да / нет')).toBeInTheDocument()
+  })
+
+  it('requires a word for every position of a value scale', async () => {
+    const api = createFakeApi({ areas: [health] })
+    stubFakeApi(api)
+
+    render(<HabitsPage />)
+    await openCreateForm()
+
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Настроение' } })
+    chooseArea(1)
+    chooseSchedule(VALUE_FOUR)
+    fireEvent.change(screen.getByLabelText('Значение 2'), { target: { value: '   ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Создать привычку' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'У каждого значения шкалы должно быть слово.',
+    )
+    expect(api.habits).toHaveLength(0)
+  })
+
+  it('does not offer completion buttons for a value habit', async () => {
+    const api = createFakeApi({ areas: [health] })
+    stubFakeApi(api)
+
+    render(<HabitsPage />)
+    await openCreateForm()
+
+    chooseSchedule(VALUE_TWO)
+    expect(screen.queryByLabelText('Единица измерения')).toBeNull()
+    expect(screen.getByLabelText('Направление')).toBeInTheDocument()
+    chooseSchedule(BINARY)
+    expect(screen.queryByLabelText('Направление')).toBeNull()
   })
 
   it('archives a habit', async () => {

@@ -11,20 +11,22 @@ import { formatDayLabel, localTodayIso } from '../components/daily/dates'
 import { useAsyncData } from '../hooks/useAsyncData'
 
 /**
- * Итоги дня — record what happened for each habit on a chosen calendar date.
+ * Итоги дня — answer the day's habits for a chosen calendar date.
  *
- * Two states are deliberately kept apart in the wording and in the data:
- * «Нет отметки» means nothing has been recorded, «Пропущено» means the user
- * said the habit was not done. Clearing a day returns it to «Нет отметки»;
- * Tracker never turns silence into a miss.
+ * The screen shows the habits that are active on that date, grouped into their
+ * spheres (Тело, Развитие, Досуг, Питание и вещества). A habit answered with a
+ * completion offers «Выполнено / Не выполнено / Пропуск»; a habit answered on a
+ * value scale (да/нет, 0…3) offers exactly the words the user configured, and a
+ * recorded `0` is a real answer rather than a missing one. Nothing about either
+ * kind is hardcoded here — the scale, its labels and the direction come from the
+ * habit's configuration, and so does the optional importance shown with it.
  *
- * Past days stay editable. For a future day only a planned skip is offered —
- * and the backend refuses anything else regardless of what is clicked.
+ * Habits, not a separate daily-state form: mood, energy, sleep, alcohol, games
+ * and computer use are ordinary habits now, so the user has one place per day
+ * instead of two. The old daily-state records stay readable through their own
+ * endpoint for history and analytics.
  */
 export function CheckInPage() {
-  // The initial day is the browser's local date; everything that follows (the
-  // «Сегодня» button, «Вчера»/«Завтра», which rules apply) comes from the
-  // server's date in the response, so both sides agree on what "today" is.
   const [entryDate, setEntryDate] = useState(() => localTodayIso())
   const [revision, setRevision] = useState(0)
 
@@ -37,39 +39,23 @@ export function CheckInPage() {
     [entryDate, revision],
   )
   const progress =
-    derived.data?.day.entry_date === entryDate
-      ? derived.data
-      : null
+    derived.data?.day.entry_date === entryDate ? derived.data : null
 
   function refresh() {
     setRevision((value) => value + 1)
-    // Marking a day can change the Owl (all done, miss pile-up, records), so
-    // the header mascot is refreshed alongside the day's own data.
     refreshOwl()
   }
 
-  // Keep this date's last result visible during refresh. Removing the summary
-  // briefly shrinks the document, drops its scrollbar and can change grid columns.
-  // Only the response for the date in the navigator is shown. A reload (after
-  // a save, or while another day loads) therefore never renders one day's
-  // records — or one day's enabled actions — under a different day's label.
+  // Keep the last result for this date visible during refresh, and never render
+  // one day's controls under another day's label.
   const day = data !== null && data.entry_date === entryDate ? data : null
-
-  const isFuture = day?.is_future ?? false
-  // `today` is the server's date and does not depend on the requested day, so
-  // it may come from any loaded response.
   const today = data?.today ?? localTodayIso()
+  const isFuture = day?.is_future ?? false
 
   return (
     <section className="page checkin-page">
-      {/*
-       * The screen's heading. The design has no visible title, but the page
-       * still needs one: it names the screen for screen readers and gives the
-       * «Оценка дня»/«Оценка недели» subheadings something to belong to.
-       */}
       <h1 className="sr-only">Итоги дня</h1>
 
-      {/* ── Compact date navigator ─────────────────────────── */}
       <DayNavigator
         entryDate={entryDate}
         today={today}
@@ -79,8 +65,8 @@ export function CheckInPage() {
 
       {isFuture ? (
         <InfoBanner>
-          Будущий день: можно только запланировать пропуск. «Выполнено» и
-          «Пропущено» появятся, когда день начнётся.
+          Будущий день: показатели нельзя отметить заранее — вернитесь к этой дате,
+          когда она начнётся.
         </InfoBanner>
       ) : null}
 
@@ -92,31 +78,25 @@ export function CheckInPage() {
         </button>
       ) : null}
 
-      {/* ── Progress summary (compact, above the grid) ──────── */}
-      {progress ? (
-        <ProgressSummary progress={progress} />
-      ) : null}
+      {progress ? <ProgressSummary progress={progress} /> : null}
 
-      {/* ── Unified check-in grid ───────────────────────────── */}
       {day === null ? (
-        <LoadingText>Загрузка отметок за {formatDayLabel(entryDate)}…</LoadingText>
+        <LoadingText>Загрузка показателей за {formatDayLabel(entryDate)}…</LoadingText>
+      ) : day.items.length === 0 ? (
+        <EmptyState>
+          На эту дату привычек ещё нет. Привычка действует с даты её создания —
+          выберите более позднюю дату.
+        </EmptyState>
       ) : (
-        <>
-          {day.items.length === 0 ? (
-            <EmptyState>
-              На эту дату ещё нет привычек: ни одна привычка не была настроена так
-              рано. Создайте привычку или выберите другую дату.
-            </EmptyState>
-          ) : null}
-          <CheckInGrid
-            key={entryDate}
-            items={day.items}
-            entryDate={day.entry_date}
-            isFuture={day.is_future}
-            onChanged={refresh}
-            progress={progress}
-          />
-        </>
+        <CheckInGrid
+          items={day.items}
+          entryDate={entryDate}
+          isFuture={isFuture}
+          onChanged={refresh}
+          progress={progress}
+          includeDailyState={false}
+          groupByArea
+        />
       )}
     </section>
   )

@@ -136,7 +136,8 @@ def build_dataset(data: DatasetInput, start: date, end: date, *, today: date) ->
             applicable = version is not None and history.active_on(on)
             entry = habit.entries.get(on)
             contexts[history.habit_id] = HabitContext(dated, applicable, entry)
-            features = {name: absent(A.NOT_APPLICABLE) for name, _, _ in DAILY_HABIT_FIELDS}
+            features = {name: absent(A.NOT_APPLICABLE) for name, _, _ in DAILY_HABIT_FIELDS
+                        if name != "value" or any(c.configuration.tracks_value for c in habit.configurations)}
             if applicable:
                 assert dated is not None  # loader aligns snapshots and progress versions
                 config = dated.configuration
@@ -144,10 +145,19 @@ def build_dataset(data: DatasetInput, start: date, end: date, *, today: date) ->
                 obligation = obligations.get(history.habit_id)
                 if obligation is not None:
                     features["required_weight"] = Value(obligation.weight)
+                elif config.tracks_value and config.direction == "neutral":
+                    features["required_weight"] = Value(0)
                 missing = A.FUTURE if future else A.SOURCE_MISSING if entry is None else None
                 features["status"] = absent(missing) if missing is not None else Value(entry.status)
                 features["completion"] = (absent(missing) if missing is not None else
                                           Value(entry.status == "done"))
+                if config.tracks_value:
+                    features["value"] = (
+                        absent(missing) if missing is not None else
+                        absent(A.FIELD_MISSING) if entry.value is None else Value(entry.value)
+                    )
+                    features["completion"] = (absent(missing) if missing is not None else
+                                              Value(entry.value is not None))
                 if config.tracking_mode == TrackingMode.BINARY_QUANTITY:
                     features["quantity"] = (
                         absent(missing) if missing is not None else
@@ -199,5 +209,7 @@ def build_dataset(data: DatasetInput, start: date, end: date, *, today: date) ->
                                            p.weekly_weight, p.preferred_weekdays) for p in wp.habits),
         ))
     return AnalyticsDataset("7A.1", start, end, today,
-                            registry(tuple(h.habit_id for h in histories)),
+                            registry(tuple(h.habit_id for h in histories), tuple(
+                                h.history.habit_id for h in data.habits
+                                if any(c.configuration.tracks_value for c in h.configurations))),
                             tuple(daily_rows), tuple(weekly_rows))
