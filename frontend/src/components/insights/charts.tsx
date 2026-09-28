@@ -16,6 +16,12 @@ import type {
   InsightSeriesRead,
 } from '../../api/insights'
 import {
+  formatAxisDateLabel,
+  formatShortDateLabel,
+  spansDifferentYears,
+  tickIndexes,
+} from '../../utils/dateUtils'
+import {
   RELATION_TO_FULL_LABELS,
   SEGMENT_LABELS,
   VERDICT_LABELS,
@@ -26,8 +32,14 @@ import {
 
 const WIDTH = 320
 const HEIGHT = 120
-const PAD_X = 8
-const PAD_Y = 14
+const PAD_LEFT = 30
+const PAD_RIGHT = 8
+const PAD_TOP = 12
+const PAD_BOTTOM = 22
+const PLOT_WIDTH = WIDTH - PAD_LEFT - PAD_RIGHT
+const PLOT_HEIGHT = HEIGHT - PAD_TOP - PAD_BOTTOM
+/** A 320px-wide plot carries three dates without them touching. */
+const MAX_DATE_TICKS = 3
 
 function dayNumber(iso: string): number {
   return Math.floor(Date.parse(`${iso}T00:00:00Z`) / 86_400_000)
@@ -49,12 +61,63 @@ function xScale(points: InsightChartPointRead[], date: string): number {
   const first = dayNumber(points[0]?.date ?? date)
   const last = dayNumber(points.at(-1)?.date ?? date)
   const span = Math.max(last - first, 1)
-  return PAD_X + ((dayNumber(date) - first) / span) * (WIDTH - 2 * PAD_X)
+  return PAD_LEFT + ((dayNumber(date) - first) / span) * PLOT_WIDTH
 }
 
 function yScale(value: number, minimum: number, maximum: number): number {
   const ratio = (value - minimum) / Math.max(maximum - minimum, Number.EPSILON)
-  return HEIGHT - PAD_Y - ratio * (HEIGHT - 2 * PAD_Y)
+  return HEIGHT - PAD_BOTTOM - ratio * PLOT_HEIGHT
+}
+
+/** The period a chart covers, spelled out under its title. */
+function periodLabel(points: { date: string }[]): string {
+  const first = points[0]?.date
+  const last = points.at(-1)?.date
+  if (!first || !last) return ''
+  return `${formatShortDateLabel(first)} — ${formatShortDateLabel(last)}`
+}
+
+/**
+ * The dates printed along the time axis of a plot, plus the y ticks shared by
+ * the line charts. Three dates is what a 320px plot carries legibly.
+ */
+function TimeAxis({ points, height = HEIGHT }: { points: { date: string }[]; height?: number }) {
+  const withYear = spansDifferentYears(points[0]?.date ?? '', points.at(-1)?.date ?? '')
+  return (
+    <>
+      <line x1={PAD_LEFT} y1={height - PAD_BOTTOM} x2={WIDTH - PAD_RIGHT} y2={height - PAD_BOTTOM} className="insight-chart__axis" />
+      {tickIndexes(points.length, MAX_DATE_TICKS).flatMap((index) => {
+        const point = points[index]
+        if (!point) return []
+        const anchor = index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle'
+        return (
+          <text key={point.date} x={xScale(points as InsightChartPointRead[], point.date)} y={height - 8}
+            textAnchor={anchor} className="insight-chart__tick">
+            {formatAxisDateLabel(point.date, withYear)}
+          </text>
+        )
+      })}
+    </>
+  )
+}
+
+function YAxis({ minimum, maximum }: { minimum: number; maximum: number }) {
+  const ticks = [maximum, (maximum + minimum) / 2, minimum]
+  return (
+    <>
+      {ticks.map((value, index) => {
+        const y = PAD_TOP + (index / (ticks.length - 1)) * PLOT_HEIGHT
+        return (
+          <g key={`${value}-${index}`}>
+            <line x1={PAD_LEFT} y1={y} x2={WIDTH - PAD_RIGHT} y2={y} className="insight-chart__gridline" />
+            <text x={PAD_LEFT - 5} y={y + 3} textAnchor="end" className="insight-chart__tick">
+              {formatNumber(value, 1)}
+            </text>
+          </g>
+        )
+      })}
+    </>
+  )
 }
 
 interface FigureProps {
@@ -63,16 +126,27 @@ interface FigureProps {
   summary: string
   label: string
   testId?: string
+  /** First and last date of the range, so the reader knows what is covered. */
+  period?: string
+  /** True when nothing can be drawn: a stated "no data", never an empty axis. */
+  empty?: boolean
   children: ReactNode
 }
 
-export function ChartFigure({ title, summary, label, testId, children }: FigureProps) {
+export function ChartFigure({ title, summary, label, testId, period, empty = false, children }: FigureProps) {
   return (
     <figure className="insight-chart" data-testid={testId}>
-      <figcaption className="insight-chart__title">{title}</figcaption>
-      <div className="insight-chart__plot" role="img" aria-label={label}>
-        {children}
-      </div>
+      <figcaption className="insight-chart__title">
+        {title}
+        {period ? <span className="insight-chart__period">{period}</span> : null}
+      </figcaption>
+      {empty ? (
+        <p className="insight-chart__empty">Нет данных за этот период.</p>
+      ) : (
+        <div className="insight-chart__plot" role="img" aria-label={label}>
+          {children}
+        </div>
+      )}
       <p className="insight-chart__summary">{summary}</p>
     </figure>
   )
@@ -107,11 +181,15 @@ export function SeriesChart({ series, title, summary }: {
     return { window, path }
   })
 
+  const shownRolling = rollingPaths.filter((item) => item.path)
+  const grainWord = series.variable.grain === 'weekly' ? 'недель' : 'дней'
   return (
     <ChartFigure title={title} summary={summary} testId={`chart-series-${series.variable.key}`}
-      label={`${title}: ${series.variable.label}. ${summary}`}>
+      period={periodLabel(points)}
+      empty={observed.length === 0}
+      label={`${title}: ${series.variable.label}. Период ${periodLabel(points)}. ${summary}`}>
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="insight-chart__svg" aria-hidden="true" focusable="false">
-        <line x1={PAD_X} y1={HEIGHT - PAD_Y} x2={WIDTH - PAD_X} y2={HEIGHT - PAD_Y} className="insight-chart__axis" />
+        <YAxis minimum={minimum} maximum={maximum} />
         {runs.filter((run) => run.length > 0).map((run, index) => (
           <path key={`${run[0]?.date ?? 'run'}-${index}`} className="insight-chart__line"
             d={run.map((point, position) => `${position === 0 ? 'M' : 'L'} ${xScale(points, point.date).toFixed(1)} ${yScale(point.value, minimum, maximum).toFixed(1)}`).join(' ')} />
@@ -119,18 +197,30 @@ export function SeriesChart({ series, title, summary }: {
         {observed.map((point) => (
           <circle key={point.date} className={point.incomplete ? 'insight-chart__dot insight-chart__dot--incomplete' : 'insight-chart__dot'}
             cx={xScale(points, point.date).toFixed(1)} cy={yScale(point.value as number, minimum, maximum).toFixed(1)} r={1.6}>
-            <title>{`${point.date}: ${formatNumber(point.value as number)}${point.incomplete ? ' (неполный период)' : ''}`}</title>
+            <title>{`${formatShortDateLabel(point.date)}: ${formatNumber(point.value as number)}${point.incomplete ? ' (неполный период)' : ''}`}</title>
           </circle>
         ))}
         {rollingPaths.filter((item) => item.path).map((item, index) => (
           <path key={item.window} className="insight-chart__rolling" d={item.path} strokeDasharray={index === 0 ? '4 3' : '1 3'}>
-            <title>{`Скользящее среднее: ${item.window} ${series.variable.grain === 'weekly' ? 'недель' : 'дней'}`}</title>
+            <title>{`Скользящее среднее за ${item.window} ${grainWord}: ${periodLabel(points)}`}</title>
           </path>
         ))}
+        <TimeAxis points={points} />
       </svg>
-      {rollingPaths.some((item) => item.path) ? <p className="insight-chart__legend">
-        {`Пунктир: скользящие средние за ${rollingPaths.filter((item) => item.path).map((item) => item.window).join(' и ')} ${series.variable.grain === 'weekly' ? 'недель' : 'дней'}.`}
-      </p> : null}
+      <p className="insight-chart__legend">
+        <span className="insight-chart__legend-item">
+          <span className="insight-chart__key insight-chart__key--line" aria-hidden="true" />
+          {`${series.variable.label} — значение по датам`}
+        </span>
+        {shownRolling.map((item, index) => (
+          <span key={item.window} className="insight-chart__legend-item">
+            <span className={index === 0
+              ? 'insight-chart__key insight-chart__key--rolling'
+              : 'insight-chart__key insight-chart__key--rolling-alt'} aria-hidden="true" />
+            {`Скользящее среднее за ${item.window} ${grainWord}`}
+          </span>
+        ))}
+      </p>
     </ChartFigure>
   )
 }
@@ -181,21 +271,27 @@ export function ScatterChart({ pairs, xLabel, yLabel, title, summary }: {
   const [xMin, xMax] = extent(pairs.map((pair) => pair.x))
   const [yMin, yMax] = extent(pairs.map((pair) => pair.y))
   return (
-    <ChartFigure title={title} summary={summary} testId="chart-scatter"
+    <ChartFigure title={title} summary={summary} testId="chart-scatter" empty={pairs.length === 0}
+      period={periodLabel(pairs.map((pair) => ({ date: pair.x_date })))}
       label={`${title}: ${xLabel} и ${yLabel}. ${summary}`}>
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="insight-chart__svg" aria-hidden="true" focusable="false">
-        <line x1={PAD_X} y1={HEIGHT - PAD_Y} x2={WIDTH - PAD_X} y2={HEIGHT - PAD_Y} className="insight-chart__axis" />
-        <line x1={PAD_X} y1={PAD_Y} x2={PAD_X} y2={HEIGHT - PAD_Y} className="insight-chart__axis" />
+        <line x1={PAD_LEFT} y1={HEIGHT - PAD_BOTTOM} x2={WIDTH - PAD_RIGHT} y2={HEIGHT - PAD_BOTTOM} className="insight-chart__axis" />
+        <line x1={PAD_LEFT} y1={PAD_TOP} x2={PAD_LEFT} y2={HEIGHT - PAD_BOTTOM} className="insight-chart__axis" />
         {pairs.map((pair) => {
-          const cx = PAD_X + ((pair.x - xMin) / Math.max(xMax - xMin, Number.EPSILON)) * (WIDTH - 2 * PAD_X)
+          const cx = PAD_LEFT + ((pair.x - xMin) / Math.max(xMax - xMin, Number.EPSILON)) * PLOT_WIDTH
           const cy = yScale(pair.y, yMin, yMax)
           return (
             <circle key={`${pair.x_date}-${pair.y_date}`} className="insight-chart__dot" cx={cx.toFixed(1)} cy={cy.toFixed(1)} r={1.8}>
-              <title>{`${xLabel} ${formatNumber(pair.x)} · ${yLabel} ${formatNumber(pair.y)}`}</title>
+              <title>{`${formatShortDateLabel(pair.x_date)}: ${xLabel} ${formatNumber(pair.x)} · ${yLabel} ${formatNumber(pair.y)}`}</title>
             </circle>
           )
         })}
-        <text x={PAD_X} y={HEIGHT - 2} className="insight-chart__tick">{xLabel}</text>
+        <text x={PAD_LEFT - 5} y={PAD_TOP + 4} textAnchor="end" className="insight-chart__tick">{formatNumber(yMax, 1)}</text>
+        <text x={PAD_LEFT - 5} y={HEIGHT - PAD_BOTTOM + 4} textAnchor="end" className="insight-chart__tick">{formatNumber(yMin, 1)}</text>
+        <text x={PAD_LEFT} y={HEIGHT - 2} className="insight-chart__tick">{xLabel}</text>
+        <text x={WIDTH - PAD_RIGHT} y={HEIGHT - 2} textAnchor="end" className="insight-chart__tick">
+          {`${formatNumber(xMin, 1)} — ${formatNumber(xMax, 1)}`}
+        </text>
       </svg>
     </ChartFigure>
   )
@@ -246,19 +342,19 @@ export function LagProfileChart({ alternatives, title, summary }: {
 }) {
   const magnitude = Math.max(...alternatives.map((item) => Math.abs(item.coefficient ?? 0)), 0.1)
   const ordered = [...alternatives].sort((first, second) => first.lag - second.lag)
-  const slot = (WIDTH - 2 * PAD_X) / Math.max(ordered.length, 1)
+  const slot = PLOT_WIDTH / Math.max(ordered.length, 1)
   const baseline = HEIGHT / 2
   return (
     <ChartFigure title={title} summary={summary} testId="chart-lag-profile"
       label={`${title}. ${summary}`}>
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="insight-chart__svg" aria-hidden="true" focusable="false">
-        <line x1={PAD_X} y1={baseline} x2={WIDTH - PAD_X} y2={baseline} className="insight-chart__axis" />
+        <line x1={PAD_LEFT} y1={baseline} x2={WIDTH - PAD_RIGHT} y2={baseline} className="insight-chart__axis" />
         {ordered.map((item, index) => {
-          if (item.coefficient === null) return <text key={item.fingerprint} x={PAD_X + index * slot + slot / 2} y={baseline} className="insight-chart__tick">—</text>
+          if (item.coefficient === null) return <text key={item.fingerprint} x={PAD_LEFT + index * slot + slot / 2} y={baseline} className="insight-chart__tick">—</text>
           const ratio = Math.abs(item.coefficient ?? 0) / magnitude
-          const height = Math.max(ratio * (HEIGHT / 2 - PAD_Y), 1)
+          const height = Math.max(ratio * (HEIGHT / 2 - PAD_TOP), 1)
           const coefficient = item.coefficient ?? 0
-          const x = PAD_X + index * slot + slot / 2
+          const x = PAD_LEFT + index * slot + slot / 2
           const y = coefficient >= 0 ? baseline - height : baseline
           const className = `insight-chart__bar insight-chart__bar--${item.guardrail}`
           return (
@@ -266,15 +362,27 @@ export function LagProfileChart({ alternatives, title, summary }: {
               <rect className={className} x={x - slot / 3} y={y} width={Math.max(slot * 0.66, 3)} height={height} rx={1}>
                 <title>{`${item.timing}: ${VERDICT_LABELS[item.guardrail]}, величина ${formatCoefficient(coefficient)}, наблюдений ${item.n}`}</title>
               </rect>
-              <text x={x} y={HEIGHT - 2} textAnchor="middle" className="insight-chart__tick">{item.lag}</text>
+              <text x={x} y={HEIGHT - 4} textAnchor="middle" className="insight-chart__tick">{item.lag}</text>
             </g>
           )
         })}
       </svg>
       <p className="insight-chart__legend">
-        <span className="insight-chart__legend-item">Пройдено</span>
-        <span className="insight-chart__legend-item">Есть ограничения</span>
-        <span className="insight-chart__legend-item">Не прошло / не проверено</span>
+        <span className="insight-chart__legend-note">
+          По горизонтали — задержка, по вертикали — величина связи.
+        </span>
+        <span className="insight-chart__legend-item">
+          <span className="insight-chart__swatch insight-chart__swatch--pass" aria-hidden="true" />Пройдено
+        </span>
+        <span className="insight-chart__legend-item">
+          <span className="insight-chart__swatch insight-chart__swatch--pass_with_warnings" aria-hidden="true" />Есть ограничения
+        </span>
+        <span className="insight-chart__legend-item">
+          <span className="insight-chart__swatch insight-chart__swatch--blocked" aria-hidden="true" />Не прошло проверки
+        </span>
+        <span className="insight-chart__legend-item">
+          <span className="insight-chart__swatch insight-chart__swatch--not_evaluable" aria-hidden="true" />Не проверено
+        </span>
       </p>
     </ChartFigure>
   )
@@ -302,7 +410,7 @@ export function SegmentChart({ segments, title, summary }: {
             <g key={segment.name}>
               <rect className={`insight-chart__bar insight-chart__bar--${segment.relation_to_full}`}
                 x={x} y={coefficient >= 0 ? baseline - height : baseline} width={56} height={height} rx={2}>
-                <title>{`${SEGMENT_LABELS[segment.name] ?? segment.name}: ${formatCoefficient(coefficient)} (${RELATION_TO_FULL_LABELS[segment.relation_to_full] ?? segment.relation_to_full})`}</title>
+                <title>{`${SEGMENT_LABELS[segment.name] ?? segment.name} (${formatShortDateLabel(segment.period.start)} — ${formatShortDateLabel(segment.period.end)}): ${formatCoefficient(coefficient)} (${RELATION_TO_FULL_LABELS[segment.relation_to_full] ?? segment.relation_to_full})`}</title>
               </rect>
               <text x={x + 28} y={coefficient >= 0 ? baseline - height - 2 : baseline + height + 8} textAnchor="middle" className="insight-chart__value">{formatCoefficient(coefficient)}</text>
               <text x={x + 28} y={116} textAnchor="middle" className="insight-chart__tick">{SEGMENT_LABELS[segment.name] ?? segment.name}</text>

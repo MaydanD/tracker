@@ -1,6 +1,10 @@
 /** Shared Russian formatting utilities for UI components. */
 
 export function formatStreakText(count: number, unit: 'days' | 'weeks'): string {
+  // A zero streak is the absence of a series, not a series of length zero: it
+  // gets neither the flame nor the warm "active" colour, which would claim a
+  // run that does not exist.
+  if (count <= 0) return 'Нет серии'
   const plural = new Intl.PluralRules('ru-RU').select(count)
   const labels = unit === 'days'
     ? { one: 'день', few: 'дня', many: 'дней', other: 'дней' }

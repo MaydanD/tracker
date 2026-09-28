@@ -70,7 +70,6 @@
 /* Active cards — multi-column, fills the viewport width */
 .checkin-grid__cells {
   display: grid;
-  /* 4 columns on 1440, 3 on ~1100, 2 on ~740, 1 on narrow */
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
   gap: 8px;
   align-items: start;
@@ -78,7 +77,7 @@
 
 /* Done section cells are slightly smaller — they're secondary */
 .checkin-grid__cells--done {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
 }
 
 /* "All done" banner */
@@ -167,7 +166,8 @@
 /* While a request is in flight */
 .ccard--busy {
   opacity: 0.7;
-  pointer-events: none;
+  /* Writes are queued. Keep hit testing and focus intact while saving:
+     pointer-events:none synthesizes a pointerleave under a stationary mouse. */
 }
 
 /* Archived habit — slight mute */
@@ -178,11 +178,18 @@
 /* ── Card header ─────────────────────────────────────────────────────────── */
 
 .ccard__head {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
+
+[data-habit-id] .ccard__head { padding-right: 18px; }
+[data-habit-id] .ccard__clear-btn { position: absolute; right: 0; }
+[data-habit-id] .ccard__name { overflow: hidden; white-space: nowrap; }
+.ccard__name-text { overflow: hidden; text-overflow: ellipsis; }
+.ccard__name .swatch { flex-shrink: 0; }
 
 .ccard__name {
   display: flex;
@@ -255,14 +262,22 @@
 
 /* ── Status buttons row ──────────────────────────────────────────────────── */
 
+/*
+ * The three status buttons share one row at every width. They used to be a
+ * wrapping flex row whose natural width was a couple of pixels narrower than a
+ * typical card column, so the whole row fell onto a second line the moment the
+ * clear button joined it. Now the buttons flex down and ellipsize instead of
+ * ever wrapping, so the row height is the same before and after marking.
+ */
 .ccard__actions {
   display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  align-items: center;
+  gap: 3px;
+  align-items: stretch;
 }
 
 .ccard__status-btn {
+  flex: 1 1 auto;
+  min-width: 0;
   border: 1px solid var(--color-border);
   border-radius: 6px;
   background: var(--color-surface);
@@ -270,8 +285,10 @@
   cursor: pointer;
   font-size: 12px;
   font-weight: 500;
-  padding: 4px 10px;
+  padding: 4px 6px;
   min-height: 28px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: border-color 0.1s ease, background 0.1s ease, color 0.1s ease;
   white-space: nowrap;
 }
@@ -418,6 +435,11 @@
   transition: border-color 0.1s ease;
 }
 
+.ccard__input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .ccard__input:focus {
   outline: none;
   border-color: var(--color-accent);
@@ -500,6 +522,16 @@
   );
 }
 
+/*
+ * A click on not-yet-stored data is blocked, but the control itself must not
+ * move, resize or flash: only the cursor changes. An opacity change here would
+ * blink on every autosave. The whole card already dims gently through
+ * `.ccard--busy` while writes are queued.
+ */
+.ok-btn:disabled {
+  cursor: default;
+}
+
 /* When the fill reaches 100% just before the timer fires */
 .ok-btn[style*="--ok-progress: 100%"] {
   color: #fff;
@@ -526,7 +558,7 @@
 
 @media (max-width: 900px) {
   .checkin-grid__cells {
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
   }
 }
 
@@ -580,8 +612,32 @@
   font-size: 16px;
 }
 
+/* ── Footer: the note field and the OK countdown share one stable row ────── */
+
+.ccard__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The note (and the skip reason) flex; they cede width to the OK button
+   rather than the card growing a second row when the habit is marked. */
+.ccard__input--note {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+}
+
 .ccard__readiness { display: flex; gap: 6px; margin-top: auto; }
 .ccard__readiness .ok-btn { flex: 1; margin-top: 0; }
+.ccard__readiness--inline { flex: 0 0 auto; margin-top: 0; }
+.ccard__readiness--inline .ok-btn {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 40px;
+  padding: 4px 8px;
+}
 .ccard__lock { border: 1px solid var(--color-border); border-radius: 6px; background: transparent; padding: 4px 8px; cursor: pointer; }
 .ccard__lock[aria-pressed="true"] { background: var(--color-surface); }
 

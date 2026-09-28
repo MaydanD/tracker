@@ -1,65 +1,172 @@
-import { useEffect, useRef, useState, type FocusEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FocusEvent } from 'react'
 import { useCardTimer } from './useCardTimer'
 
-/** Readiness belongs to a card, independently of the shared persistence queue. */
-export function useCardReadiness({ revision, savedRevision, filled, error, completed, onDone }: {
+/**
+ * Readiness belongs to a card, independently of the shared persistence queue.
+ *
+ * The 5-second countdown means exactly one thing: the user has stopped
+ * interacting with the card, the newest value is stored, and the user has left
+ * the card. Clicking a control inside a card — a status button, a scale value,
+ * a toggle, a field, the clear button, the lock or «ОК» — is *interaction*,
+ * never departure, so it can neither arm nor disarm the countdown on its own.
+ *
+ * Engagement is tracked from the two sources a click cannot fake:
+ *
+ * - `pointerInside` — the pointer is over this card. It is set by a press on
+ *   the card and cleared when the pointer actually leaves it (or when the user
+ *   presses somewhere else), so pressing a status button keeps the card engaged
+ *   until the pointer moves away.
+ * - `typing` — a field of this card is in use by the user. It survives moving
+ *   between the card's own controls and ends when focus leaves the card or the
+ *   user presses somewhere else, exactly as before.
+ *
+ * Rendering, manual eligibility and countdown eligibility are three distinct
+ * questions, answered by three distinct values:
+ *
+ * - `showOk` — *should the «ОК» control be on screen at all?* It depends only
+ *   on the card holding a stored value (`stored`), still holding a value worth
+ *   completing (`filled`) and not already being recorded (`completed`). It
+ *   deliberately does NOT look at `revision === savedRevision`: a write being
+ *   in flight must never unmount the button, or its geometry would flicker on
+ *   every autosave.
+ * - `canConfirm` — *may the user complete the card by hand right now?* This is
+ *   the stricter condition: the newest revision must also be stored and there
+ *   must be no error, so a click can never complete stale data. While false
+ *   the button stays on screen, disabled.
+ * - `canCountdown` — *should the 5-second auto-confirm run right now?* The
+ *   strictest: additionally the user must have left the card (no pointer
+ *   inside, no field in use) and the card must not be pinned by the lock.
+ *
+ * Interacting with a field therefore stops the countdown without ever hiding
+ * or unmounting the button.
+ */
+export function useCardReadiness({ revision, savedRevision, stored, filled, error, completed, onDone }: {
   revision: number
   savedRevision: number
+  /** A value has already been persisted for this card (a manual confirm is meaningful). */
+  stored: boolean
+  /** The card currently holds a value worth completing (may be ahead of what is stored). */
   filled: boolean
   error: string | null
   completed: boolean
   onDone: () => void
 }) {
   const timer = useCardTimer()
-  const [editing, setEditing] = useState(false)
+  /** The user is still in this card: pointer over it, or typing in a field. */
+  const [engaged, setEngaged] = useState(false)
+  /** A field of this card is in use — the auto-countdown must wait, not the «ОК» button. */
+  const [typing, setTyping] = useState(false)
   const [locked, setLocked] = useState(false)
   const card = useRef<HTMLDivElement>(null)
   const pointerInside = useRef(false)
   const textSession = useRef(false)
+  const keyboardFocus = useRef(false)
+  const keyboardInput = useRef(true)
   const callback = useRef(onDone)
   callback.current = onDone
-  const ready = revision > 0 && revision === savedRevision && filled && !error && !completed
-  const { reset, startCountdown } = timer
+  // Three independent answers — see the module docstring.
+  const settled = revision > 0 && revision === savedRevision
+  const showOk = stored && filled && !completed
+  const canConfirm = showOk && settled && !error
+  const canCountdown = canConfirm && !engaged && !locked && !typing
+  const { reset, startCountdown, timerState, confirmNow: confirmTimerNow } = timer
+  /** Complete by hand — only ever with the newest value stored. */
+  const confirmNow = useCallback(() => {
+    if (canConfirm) confirmTimerNow()
+  }, [canConfirm, confirmTimerNow])
 
-  useEffect(() => {
-    function pointerDown(event: PointerEvent) {
-      pointerInside.current = card.current?.contains(event.target as Node) ?? false
-      if (!pointerInside.current) { textSession.current = false; setEditing(false) }
-    }
-    document.addEventListener('pointerdown', pointerDown, true)
-    return () => document.removeEventListener('pointerdown', pointerDown, true)
+  /** Re-derive engagement from the two sources a click cannot fake. */
+  const syncEngagement = useCallback(() => {
+    setEngaged(pointerInside.current || textSession.current || keyboardFocus.current)
   }, [])
 
   useEffect(() => {
-    reset()
-    if (ready && !editing && !locked) startCountdown()
-  }, [revision, ready, editing, locked, reset, startCountdown])
+    function pointerDown(event: PointerEvent) {
+      keyboardInput.current = false
+      keyboardFocus.current = false
+      if (card.current?.contains(event.target as Node)) {
+        // A press on the card is interaction; the user is still here.
+        pointerInside.current = true
+        setEngaged(true)
+        return
+      }
+      // A press anywhere else is a real departure from this card.
+      pointerInside.current = false
+      textSession.current = false
+      setTyping(false)
+      setEngaged(false)
+    }
+    function keyDown() {
+      keyboardInput.current = true
+      if (card.current?.contains(document.activeElement)) {
+        keyboardFocus.current = true
+        reset()
+        setEngaged(true)
+      }
+    }
+    document.addEventListener('pointerdown', pointerDown, true)
+    document.addEventListener('keydown', keyDown, true)
+    return () => {
+      document.removeEventListener('pointerdown', pointerDown, true)
+      document.removeEventListener('keydown', keyDown, true)
+    }
+  }, [reset])
 
   useEffect(() => {
-    if (timer.timerState === 'done' && ready) callback.current()
-  }, [timer.timerState, ready])
+    reset()
+    // Only a card that is stored, filled and left alone counts down.
+    if (canCountdown) startCountdown()
+  }, [revision, canCountdown, reset, startCountdown])
+
+  useEffect(() => {
+    if (timerState === 'done' && canConfirm) callback.current()
+  }, [timerState, canConfirm])
 
   return {
     ...timer,
+    confirmNow,
     locked,
-    showActions: ready && (!editing || locked),
+    /** The manual «ОК» control is on screen whenever the card holds a stored value. */
+    showOk,
+    /** A manual confirmation is safe only with the newest value stored and no error. */
+    canConfirm,
+    /** The auto-countdown may run only once the user has left the card. */
+    canCountdown,
     toggleLock: () => setLocked(value => !value),
     focusProps: {
       ref: card,
-      onChangeCapture: () => { textSession.current = true; reset(); setEditing(true) },
-      onClickCapture: (event: React.MouseEvent<HTMLElement>) => {
-        const target = event.target as HTMLElement
-        if (!textSession.current && target.closest('button') && !target.closest('[data-readiness-actions]')) {
-          setEditing(false)
-        }
+      onPointerEnter: () => {
+        pointerInside.current = true
+        reset()
+        setEngaged(true)
+      },
+      // Leaving the card ends the engagement — unless the user is mid-typing,
+      // in which case the field still holds their attention.
+      onPointerLeave: () => {
+        pointerInside.current = false
+        syncEngagement()
+      },
+      onChangeCapture: () => {
+        textSession.current = true
+        setTyping(true)
+        reset()
+        setEngaged(true)
       },
       onFocusCapture: (event: FocusEvent<HTMLElement>) => {
         const target = event.target as HTMLElement
-        if (target.closest('[data-readiness-actions]')) return
-        if (target.matches('input, textarea')) textSession.current = true
-        if (textSession.current || (timer.timerState === 'counting' && !event.currentTarget.contains(event.relatedTarget as Node | null))) {
+        keyboardFocus.current = keyboardInput.current
+        if (target.matches('input, textarea')) {
+          textSession.current = true
+          setTyping(true)
           reset()
-          setEditing(true)
+          setEngaged(true)
+          return
+        }
+        // Entering the card cancels a running countdown; it starts fresh once
+        // the user leaves again.
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          reset()
+          setEngaged(true)
         }
       },
       onBlurCapture: (event: FocusEvent<HTMLElement>) => {
@@ -68,7 +175,9 @@ export function useCardReadiness({ revision, savedRevision, filled, error, compl
         if (event.relatedTarget === null && pointerInside.current) return
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
           textSession.current = false
-          setEditing(false)
+          keyboardFocus.current = false
+          setTyping(false)
+          syncEngagement()
         }
       },
     },

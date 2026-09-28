@@ -128,7 +128,8 @@ function HabitCardEditor({
   const [revision, setRevision] = useState(0)
   const [savedRevision, setSavedRevision] = useState(0)
   const readiness = useCardReadiness({ revision, savedRevision,
-    filled: savedEntry !== null, error, completed: inCompletedSection,
+    stored: savedEntry !== null, filled: savedEntry !== null,
+    error, completed: inCompletedSection,
     onDone: () => onTimerDone?.(item.habit_id) })
   const { timerState, progress, confirmNow, reset } = readiness
 
@@ -222,10 +223,10 @@ function HabitCardEditor({
   // Render
   // -------------------------------------------------------------------------
 
-  const isIdle = timerState === 'idle'
-
-  // In the active section: show a "settled" look while counting down.
-  const showCountdown = readiness.showActions
+  // In the active section: offer «ОК» as soon as the value is stored. Whether
+  // the auto-countdown is already running is a separate question — interaction
+  // with a field pauses it but never removes the button.
+  const showOk = readiness.showOk
 
   const quantityId = `qty-${item.habit_id}`
   const reasonId = `reason-${item.habit_id}`
@@ -237,8 +238,8 @@ function HabitCardEditor({
       {...readiness.focusProps}
       className={[
         'ccard',
-        showCountdown ? 'ccard--counting' : '',
-        !isIdle && !inCompletedSection ? 'ccard--filled' : '',
+        timerState === 'counting' ? 'ccard--counting' : '',
+        timerState !== 'idle' && !inCompletedSection ? 'ccard--filled' : '',
         item.is_archived ? 'ccard--archived' : '',
         busy ? 'ccard--busy' : '',
       ]
@@ -248,18 +249,34 @@ function HabitCardEditor({
     >
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="ccard__head">
-        <span className="ccard__name" title={scheduleLabel(item.schedule)}>
+        <span className="ccard__name" title={`${item.name} · ${scheduleLabel(item.schedule)}`}>
           <span
             className="swatch swatch--small"
             style={{ backgroundColor: item.area.color }}
             aria-hidden="true"
           />
-          {item.name}
+          <span className="ccard__name-text" title={scheduleLabel(item.schedule)}>{item.name}</span>
           {item.is_archived ? (
             <span className="badge badge--muted">архив</span>
           ) : null}
         </span>
         <StatusPill entry={savedEntry} />
+        {/*
+         * The clear control belongs to the recorded state, so it sits with the
+         * status pill instead of the status buttons. The button row is exactly
+         * as wide as its three options, and one more button there pushed the
+         * row onto a second line — a visible jump the moment a habit was marked.
+         */}
+        {savedEntry !== null ? (
+          <button
+            type="button"
+            className="ccard__clear-btn"
+            onClick={handleClear}
+            aria-label="Убрать отметку"
+          >
+            ✕
+          </button>
+        ) : null}
       </div>
 
       {/* ── Status buttons ─────────────────────────────────── */}
@@ -273,47 +290,28 @@ function HabitCardEditor({
               type="button"
               className={`ccard__status-btn${isSelected ? ' ccard__status-btn--active' : ''}`}
               aria-pressed={isSelected}
+              aria-label={statusActionLabel(option.value, isFuture)}
               disabled={blocked}
               title={
                 blocked
                   ? 'Для будущей даты доступен только запланированный пропуск'
-                  : undefined
+                  : statusActionLabel(option.value, isFuture)
               }
               onClick={() => chooseStatus(option.value)}
             >
-              {statusActionLabel(option.value, isFuture)}
+              {option.value === 'skipped' ? 'Пропуск' : statusActionLabel(option.value, isFuture)}
             </button>
           )
         })}
-
-        {savedEntry !== null ? (
-          <button
-            type="button"
-            className="ccard__clear-btn"
-            onClick={handleClear}
-            aria-label="Убрать отметку"
-          >
-            ✕
-          </button>
-        ) : null}
       </div>
 
-      {/* ── Extra fields ───────────────────────────────────── */}
-      {draft.status === 'skipped' ? (
-        <div className="ccard__extra">
-          <input
-            id={reasonId}
-            aria-label="Причина пропуска"
-            className="ccard__input"
-            placeholder="Причина пропуска"
-            maxLength={200}
-            value={draft.skipReason}
-            onChange={(e) => updateExtra('skipReason', e.target.value)}
-          />
-        </div>
-      ) : null}
-
-      {tracksQuantity && draft.status !== null && draft.status !== 'skipped' ? (
+      {/*
+       * Quantity stays in its own row, but a habit that tracks a quantity
+       * always shows this row — even before it is marked. Rendering it only
+       * after a status was chosen used to add a whole row the moment the user
+       * marked the habit, which shoved every card below it downwards.
+       */}
+      {tracksQuantity ? (
         <div className="ccard__extra">
           <input
             id={quantityId}
@@ -324,21 +322,8 @@ function HabitCardEditor({
             step={item.quantity_allows_decimal ? 'any' : '1'}
             placeholder={item.quantity_unit ?? 'Количество'}
             value={draft.quantity}
+            disabled={draft.status === null || draft.status === 'skipped'}
             onChange={(e) => updateExtra('quantity', e.target.value)}
-          />
-        </div>
-      ) : null}
-
-      {draft.status !== null ? (
-        <div className="ccard__extra">
-          <input
-            id={noteId}
-            aria-label="Заметка (необязательно)"
-            className="ccard__input"
-            placeholder="Заметка (необязательно)"
-            maxLength={500}
-            value={draft.note}
-            onChange={(e) => updateExtra('note', e.target.value)}
           />
         </div>
       ) : null}
@@ -350,15 +335,46 @@ function HabitCardEditor({
         </p>
       ) : null}
 
-      {/* ── OK button (countdown) ──────────────────────────── */}
-      {showCountdown ? (
-        <OkButton
-          progress={progress}
-          onConfirm={confirmNow}
-          locked={readiness.locked}
-          onToggleLock={readiness.toggleLock}
+      {/*
+       * Footer: the note field plus the OK countdown, in one row that is
+       * always rendered. The note simply gives up width to the OK button
+       * instead of the card growing a new row. The skip-reason field joins
+       * this row too, so revealing it cannot change the card's height either.
+       */}
+      <div className="ccard__footer">
+        {draft.status === 'skipped' ? (
+          <input
+            id={reasonId}
+            aria-label="Причина пропуска"
+            className="ccard__input ccard__input--note"
+            placeholder="Причина пропуска"
+            maxLength={200}
+            value={draft.skipReason}
+            onChange={(e) => updateExtra('skipReason', e.target.value)}
+          />
+        ) : null}
+        <input
+          id={noteId}
+          aria-label="Заметка (необязательно)"
+          className="ccard__input ccard__input--note"
+          placeholder="Заметка (необязательно)"
+          maxLength={500}
+          value={draft.note}
+          disabled={draft.status === null}
+          onChange={(e) => updateExtra('note', e.target.value)}
         />
-      ) : null}
+        {showOk ? (
+          <OkButton
+            inline
+            progress={progress}
+            counting={timerState === 'counting'}
+            onConfirm={confirmNow}
+            disabled={!readiness.canConfirm}
+            locked={readiness.locked}
+            onToggleLock={readiness.toggleLock}
+          />
+        ) : null}
+      </div>
     </div>
   )
 }

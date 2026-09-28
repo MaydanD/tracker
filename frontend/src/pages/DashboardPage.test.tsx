@@ -136,8 +136,10 @@ describe('DashboardPage', () => {
     expect(page?.querySelector('.dashboard-streaks')).toBeInTheDocument()
     expect(page?.textContent).not.toMatch(/Вчера|Сегодня/)
 
+    // The region renders before its calendar data arrives, so the chart, its
+    // legend and its lines all have to be awaited, not queried synchronously.
     const trends = await screen.findByRole('region', { name: 'Динамика по сферам' })
-    expect(within(trends).getByRole('img', {
+    expect(await within(trends).findByRole('img', {
       name: 'Оценка выполнения привычек по сферам за последние 30 дней',
     })).toBeInTheDocument()
     expect(within(trends).getByRole('list')).toHaveTextContent('Здоровье')
@@ -153,6 +155,24 @@ describe('DashboardPage', () => {
     expect(within(streaks).getByText('🔥 12 дней')).toBeInTheDocument()
     expect(within(streaks).getByText('Тренировка')).toBeInTheDocument()
     expect(within(streaks).getByText('🔥 4 недели')).toBeInTheDocument()
+  })
+
+  it('does not draw a flame for a habit whose streak is over or never started', async () => {
+    stubDashboard({
+      streaks: [
+        { habit_id: 1, current_streak: 0, unit: 'days', as_of: TODAY },
+        { habit_id: 2, current_streak: 4, unit: 'weeks', as_of: TODAY },
+      ],
+    })
+    render(<DashboardPage />)
+
+    const streaks = await screen.findByRole('region', { name: 'Текущие серии' })
+    const broken = within(streaks).getByText('Нет серии')
+    expect(broken).toHaveClass('dashboard-streak__value--none')
+    expect(streaks.textContent).not.toContain('🔥 0')
+    // A real streak keeps its warm, active value.
+    expect(within(streaks).getByText('🔥 4 недели')).toHaveClass('dashboard-streak__value')
+    expect(within(streaks).getByText('🔥 4 недели')).not.toHaveClass('dashboard-streak__value--none')
   })
 
   it('shows the current owl message and no fill action for a fully marked day', async () => {

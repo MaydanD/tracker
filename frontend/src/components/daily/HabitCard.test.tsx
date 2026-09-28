@@ -195,9 +195,11 @@ describe('HabitCard', () => {
     await screen.findByRole('button', { name: /ОК/ })
     act(() => tickRaf(3_000))   // 3 s in
 
-    // Change value — should reset timer
+    // Change value — should reset timer. The button stays on screen while the
+    // new value is written, so wait for it to become confirmable again before
+    // advancing the clock.
     fireEvent.click(screen.getByRole('button', { name: 'Пропущено' }))
-    await screen.findByRole('button', { name: /ОК/ })
+    await waitFor(() => expect(screen.getByRole('button', { name: /ОК/ })).toBeEnabled())
 
     // The old timer's tick should NOT fire onTimerDone
     act(() => tickRaf(5_000))   // would have been 5 s from first save
@@ -272,5 +274,232 @@ describe('HabitCard', () => {
       expect.stringContaining('/entries/'),
       expect.anything(),
     )
+  })
+
+  // -------------------------------------------------------------------------
+  // Layout stability — the card must not grow a row when the habit is marked.
+  // jsdom cannot measure heights, so these guard the structural cause of the
+  // jump: the number of direct rows inside `.ccard` used to change on mark.
+  // -------------------------------------------------------------------------
+
+  /** The direct rows of a card, in order — the card's vertical skeleton. */
+  function rows(card: HTMLElement) {
+    return [...card.children].map((node) => node.className)
+  }
+
+  it('marks a habit without adding or removing a card row', async () => {
+    stubApi({
+      [`PUT /api/habits/1/entries/${TODAY}`]: () => jsonResponse(makeEntry()),
+    })
+    renderCard()
+    const card = screen.getByRole('group', { name: 'Чтение' })
+    const before = rows(card)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
+    await screen.findByRole('button', { name: /ОК/ })
+
+    // The OK countdown shares the footer row instead of appending a new one.
+    expect(rows(card)).toEqual(before)
+    expect(screen.getByPlaceholderText('Заметка (необязательно)').parentElement)
+      .toHaveClass('ccard__footer')
+  })
+
+  it('keeps the note field in place, disabled until a status is chosen', async () => {
+    stubApi({
+      [`PUT /api/habits/1/entries/${TODAY}`]: () => jsonResponse(makeEntry()),
+    })
+    renderCard()
+    const note = screen.getByPlaceholderText('Заметка (необязательно)')
+    expect(note).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
+
+    await waitFor(() => expect(note).toBeEnabled())
+  })
+
+  it('reveals the skip reason inside the existing footer row', () => {
+    stubApi({})
+    renderCard()
+    const card = screen.getByRole('group', { name: 'Чтение' })
+    const before = rows(card).length
+
+    fireEvent.click(screen.getByRole('button', { name: 'Осознанный пропуск' }))
+
+    const reason = screen.getByPlaceholderText('Причина пропуска')
+    const note = screen.getByPlaceholderText('Заметка (необязательно)')
+    expect(reason.parentElement).toHaveClass('ccard__footer')
+    expect(reason.parentElement).toBe(note.parentElement)
+    expect(rows(card)).toHaveLength(before)
+  })
+
+  it('reserves the quantity row for a quantity habit before it is marked', async () => {
+    stubApi({
+      [`PUT /api/habits/1/entries/${TODAY}`]: () => jsonResponse(makeEntry()),
+    })
+    renderCard({ tracking_mode: 'binary_quantity', quantity_unit: 'страниц' })
+    const card = screen.getByRole('group', { name: 'Чтение' })
+    const quantity = screen.getByLabelText('Количество')
+    expect(quantity).toBeDisabled()
+    const before = rows(card)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
+
+    await waitFor(() => expect(quantity).toBeEnabled())
+    expect(rows(card)).toEqual(before)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OK visibility vs. countdown eligibility.
+//
+// A field being in use may pause the automatic countdown, but it must never
+// take the manual «ОК» control away: the user has to be able to confirm a
+// card by hand at any moment.
+// ---------------------------------------------------------------------------
+
+describe('HabitCard — «ОК» stays while a field is in use', () => {
+  beforeEach(installFakeRaf)
+
+  /** The card element for the default «Чтение» habit. */
+  const card = () => screen.getByRole('group', { name: 'Чтение' })
+  const okButton = () => screen.getByRole('button', { name: /ОК/ })
+  const note = () => screen.getByPlaceholderText('Заметка (необязательно)')
+  const counting = () => card().classList.contains('ccard--counting')
+
+  function stubOneSave() {
+    let calls = 0
+    const stub = stubApi({
+      [`PUT /api/habits/1/entries/${TODAY}`]: () => {
+        calls += 1
+        return jsonResponse(makeEntry(calls))
+      },
+    })
+    return { stub, calls: () => calls }
+  }
+
+  it('offers «ОК» as soon as the status is stored', async () => {
+    stubApi({ [`PUT /api/habits/1/entries/${TODAY}`]: () => jsonResponse(makeEntry()) })
+    renderCard()
+
+    expect(screen.queryByRole('button', { name: /ОК/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
+
+    expect(await screen.findByRole('button', { name: /ОК/ })).toBeInTheDocument()
+  })
+
+  it('keeps «ОК» when the note field takes focus', async () => {
+    stubApi({ [`PUT /api/habits/1/entries/${TODAY}`]: () => jsonResponse(makeEntry()) })
+    renderCard()
+    fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
+    await screen.findByRole('button', { name: /ОК/ })
+
+    fireEvent.focus(note())
+
+    expect(okButton()).toBeInTheDocument()
+  })
+
+  it('keeps the same «ОК» node while the user types a note', async () => {
+    const { calls } = stubOneSave()
+    renderCard()
+    fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
+    await waitFor(() => expect(okButton()).toBeEnabled())
+    const button = okButton()
+
+    const field = note()
+    fireEvent.focus(field)
+    fireEvent.change(field, { target: { value: 'прочитал главу' } })
+    await waitFor(() => expect(calls()).toBe(2))
+
+    // The keystroke's autosave settles: the very same node is still there and
+    // becomes confirmable again, while the field keeps the typed text.
+    expect(okButton()).toBe(button)
+    await waitFor(() => expect(okButton()).toBeEnabled())
+    expect(field).toHaveValue('прочитал главу')
+    expect(counting()).toBe(false)
+  })
+
+  it('does not count down while the note is in use and starts once focus leaves', async () => {
+    stubApi({ [`PUT /api/habits/1/entries/${TODAY}`]: () => jsonResponse(makeEntry()) })
+    const { onTimerDone } = renderCard()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
+    // Focus the field before the first save settles, so no countdown ever arms.
+    fireEvent.focus(note())
+    await screen.findByRole('button', { name: /ОК/ })
+
+    act(() => tickRaf(5_000))
+    expect(counting()).toBe(false)
+    expect(onTimerDone).not.toHaveBeenCalled()
+
+    fireEvent.blur(note(), { relatedTarget: null })
+    await waitFor(() => expect(counting()).toBe(true))
+    act(() => tickRaf(10_000))
+    await waitFor(() => expect(onTimerDone).toHaveBeenCalledWith(1))
+  })
+
+  it('cancels a running countdown when the user returns to the note, keeping «ОК»', async () => {
+    stubApi({ [`PUT /api/habits/1/entries/${TODAY}`]: () => jsonResponse(makeEntry()) })
+    const { onTimerDone } = renderCard()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
+    await screen.findByRole('button', { name: /ОК/ })
+    await waitFor(() => expect(counting()).toBe(true))
+    act(() => tickRaf(3_000))
+
+    fireEvent.focus(note())
+
+    expect(counting()).toBe(false)
+    expect(okButton()).toBeInTheDocument()
+    act(() => tickRaf(10_000))
+    expect(onTimerDone).not.toHaveBeenCalled()
+  })
+
+  it('confirms by hand with «ОК» when a note is already filled and in focus', async () => {
+    const { calls } = stubOneSave()
+    const { onTimerDone } = renderCard()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
+    await screen.findByRole('button', { name: /ОК/ })
+    const field = note()
+    fireEvent.focus(field)
+    fireEvent.change(field, { target: { value: 'заметка' } })
+    await waitFor(() => expect(calls()).toBe(2))
+    // Confirming becomes possible again only once the new value is stored.
+    await waitFor(() => expect(okButton()).toBeEnabled())
+
+    fireEvent.click(okButton())
+
+    expect(onTimerDone).toHaveBeenCalledWith(1)
+  })
+
+  it('keeps «ОК» through lock and unlock, even with the note in focus', async () => {
+    stubApi({ [`PUT /api/habits/1/entries/${TODAY}`]: () => jsonResponse(makeEntry()) })
+    renderCard()
+    fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
+    await screen.findByRole('button', { name: /ОК/ })
+    fireEvent.focus(note())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Закрыть замок — оставить карточку' }))
+    expect(okButton()).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть замок — запустить отсчёт' }))
+    expect(okButton()).toBeInTheDocument()
+  })
+
+  it('keeps «ОК» while a quantity habit\u2019s number field is in use', async () => {
+    const { calls } = stubOneSave()
+    renderCard({ tracking_mode: 'binary_quantity', quantity_unit: 'страниц' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
+    await screen.findByRole('button', { name: /ОК/ })
+    const quantity = screen.getByLabelText('Количество')
+
+    fireEvent.focus(quantity)
+    fireEvent.change(quantity, { target: { value: '12' } })
+    await waitFor(() => expect(calls()).toBe(2))
+
+    expect(await screen.findByRole('button', { name: /ОК/ })).toBeInTheDocument()
+    expect(quantity).toHaveValue(12)
+    expect(counting()).toBe(false)
   })
 })

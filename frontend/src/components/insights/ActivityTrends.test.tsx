@@ -58,6 +58,41 @@ describe('ActivityTrends', () => {
     expect(screen.getAllByRole('img')).toHaveLength(4)
   })
 
+  it('states the covered range and prints its dates along the time axis', async () => {
+    stubApi({
+      'GET /api/calendar': () => jsonResponse([
+        {
+          entry_date: '2026-09-24', daily_score: 75, completed_weight: 3, required_weight: 4,
+          has_obligations: true, has_daily_state: true, mood: 4, is_future: false,
+          area_scores: [], habit_scores: [],
+        },
+        {
+          entry_date: '2026-09-25', daily_score: 100, completed_weight: 4, required_weight: 4,
+          has_obligations: true, has_daily_state: true, mood: 5, is_future: false,
+          area_scores: [], habit_scores: [],
+        },
+      ]),
+    })
+
+    render(<ActivityTrends today="2026-09-25" />)
+
+    // Loading first, charts after the range answers.
+    expect(screen.getByText(/Загрузка графиков/)).toBeInTheDocument()
+    expect(await screen.findByText('Выполнение привычек')).toBeInTheDocument()
+    expect(screen.getByText('Период: 24.09.2026 — 25.09.2026')).toBeInTheDocument()
+
+    const chart = screen.getByText('Выполнение привычек').closest('figure') as HTMLElement
+    const ticks = [...chart.querySelectorAll('text.insight-chart__tick')].map((node) => node.textContent)
+    expect(ticks).toContain('24.09')
+    expect(ticks).toContain('25.09')
+    // The value axis carries its unit.
+    expect(ticks).toContain('100%')
+    expect(ticks).toContain('0%')
+    const moodChart = screen.getByText('Настроение').closest('figure') as HTMLElement
+    const moodTicks = [...moodChart.querySelectorAll('text.insight-chart__tick')].map((node) => node.textContent)
+    expect(moodTicks).toContain('из 5')
+  })
+
   it('accepts legacy calendar days without trend fields and null trend lists', async () => {
     stubApi({
       'GET /api/calendar': () => jsonResponse([
@@ -93,5 +128,8 @@ describe('ActivityTrends', () => {
     expect(screen.queryByRole('region', { name: 'Графики по сферам' })).toBeNull()
     expect(screen.queryByRole('region', { name: 'Графики по привычкам' })).toBeNull()
     expect(screen.queryByRole('alert')).toBeNull()
+    // Days without a value are not a line at zero: the chart says so instead.
+    expect(screen.getAllByText('Нет данных за этот период.')).toHaveLength(2)
+    expect(screen.queryAllByRole('img')).toHaveLength(0)
   })
 })

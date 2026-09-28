@@ -211,3 +211,57 @@ describe('Данные и резервные копии', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Скачать резервную копию' })).toBeEnabled())
   })
 })
+
+describe('Выбор файла резервной копии', () => {
+  it('renders a styled control with a neutral placeholder instead of the raw input', () => {
+    const { container } = renderPage()
+    const input = screen.getByLabelText('Выбрать файл резервной копии')
+    expect(input).toHaveAttribute('type', 'file')
+    expect(input).toHaveAttribute('accept', '.zip,application/zip')
+    expect(input).toHaveClass('file-picker__input')
+    const label = container.querySelector('label.file-picker__button')
+    expect(label).toHaveAttribute('for', input.id)
+    expect(label).toHaveTextContent('Выбрать файл')
+    expect(input).toHaveAccessibleName('Выбрать файл резервной копии')
+    expect(screen.getByText('Файл не выбран')).toBeInTheDocument()
+  })
+
+  it('names the chosen file next to the button and keeps the input keyboard reachable', async () => {
+    const { container } = renderPage()
+    const input = screen.getByLabelText('Выбрать файл резервной копии') as HTMLInputElement
+    const label = container.querySelector('label.file-picker__button') as HTMLLabelElement
+    expect(label.htmlFor).toBe(input.id)
+    expect(input).not.toHaveAttribute('tabindex')
+    input.focus()
+    expect(input).toHaveFocus()
+    choose('tracker-2026-09-28.zip')
+    expect(screen.getByText('tracker-2026-09-28.zip')).toBeInTheDocument()
+    expect(screen.queryByText('Файл не выбран')).not.toBeInTheDocument()
+    await screen.findByText('834')
+  })
+
+  it('replaces the shown name when another file is picked and resets after cancel', async () => {
+    renderPage()
+    choose('first.zip')
+    await screen.findByText('834')
+    choose('second.zip')
+    expect(screen.getByText('second.zip')).toBeInTheDocument()
+    expect(screen.queryByText('first.zip')).not.toBeInTheDocument()
+    await waitFor(() => expect(dataCalls()).toHaveLength(2))
+    expect(fetch).toHaveBeenLastCalledWith('/api/backup/validate', expect.objectContaining({ body: expect.any(File), method: 'POST' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Отменить' }))
+    expect(screen.getByText('Файл не выбран')).toBeInTheDocument()
+    expect(screen.queryByText('second.zip')).not.toBeInTheDocument()
+    expect((screen.getByLabelText('Выбрать файл резервной копии') as HTMLInputElement).value).toBe('')
+  })
+
+  it('keeps the styled control visible but inert during restore', async () => {
+    const { container } = renderPage()
+    await confirmPreview()
+    vi.mocked(fetch).mockImplementation(withStatusRoutes(() => new Promise(() => {})))
+    fireEvent.click(screen.getByRole('button', { name: 'Да, восстановить' }))
+    expect(screen.getByLabelText('Выбрать файл резервной копии')).toBeDisabled()
+    expect(container.querySelector('.file-picker')).toHaveClass('file-picker--disabled')
+    expect(container.querySelector('label.file-picker__button')).toBeInTheDocument()
+  })
+})

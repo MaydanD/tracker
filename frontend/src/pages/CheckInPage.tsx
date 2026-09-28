@@ -37,7 +37,7 @@ export function CheckInPage() {
     [entryDate, revision],
   )
   const progress =
-    !derived.loading && !derived.error && derived.data?.day.entry_date === entryDate
+    derived.data?.day.entry_date === entryDate
       ? derived.data
       : null
 
@@ -48,6 +48,8 @@ export function CheckInPage() {
     refreshOwl()
   }
 
+  // Keep this date's last result visible during refresh. Removing the summary
+  // briefly shrinks the document, drops its scrollbar and can change grid columns.
   // Only the response for the date in the navigator is shown. A reload (after
   // a save, or while another day loads) therefore never renders one day's
   // records — or one day's enabled actions — under a different day's label.
@@ -60,6 +62,13 @@ export function CheckInPage() {
 
   return (
     <section className="page checkin-page">
+      {/*
+       * The screen's heading. The design has no visible title, but the page
+       * still needs one: it names the screen for screen readers and gives the
+       * «Оценка дня»/«Оценка недели» subheadings something to belong to.
+       */}
+      <h1 className="sr-only">Итоги дня</h1>
+
       {/* ── Compact date navigator ─────────────────────────── */}
       <DayNavigator
         entryDate={entryDate}

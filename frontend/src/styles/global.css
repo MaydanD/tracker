@@ -37,6 +37,11 @@ body,
   margin: 0;
 }
 
+/* A vertical scrollbar must not change the available width of responsive grids. */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   background: var(--color-bg);
   color: var(--color-text);

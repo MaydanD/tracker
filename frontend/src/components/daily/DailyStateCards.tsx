@@ -222,6 +222,56 @@ interface BaseCardProps {
   inCompletedSection?: boolean
 }
 
+// ---------------------------------------------------------------------------
+// Duration field (hours + minutes)
+// ---------------------------------------------------------------------------
+
+/** `450` → `['7', '30']`; `null` (no value) → two empty boxes. */
+function splitMinutes(total: number | null): [string, string] {
+  return total === null ? ['', ''] : [String(Math.floor(total / 60)), String(total % 60)]
+}
+
+/**
+ * Local «ч / мин» pair for one duration field.
+ *
+ * The shared draft is the source of truth, but the two boxes keep their own
+ * text so the user can type freely. An outside change to the draft — the card
+ * being cleared, a value arriving from another path — is therefore adopted,
+ * while the component's own edit (the value it just wrote to the draft) keeps
+ * exactly what was typed, digits and all. Nothing here writes by itself, so it
+ * can never loop with the autosave.
+ */
+export function useDurationParts(
+  value: number | null,
+  commit: (total: number | null) => void,
+) {
+  const [hours, setHours] = useState(() => splitMinutes(value)[0])
+  const [minutes, setMinutes] = useState(() => splitMinutes(value)[1])
+  // What the boxes themselves last produced, so the echo of our own write is
+  // never mistaken for an outside change.
+  const written = useRef<number | null>(value)
+
+  useEffect(() => {
+    if (value === written.current) return
+    written.current = value
+    const [nextHours, nextMinutes] = splitMinutes(value)
+    setHours(nextHours)
+    setMinutes(nextMinutes)
+  }, [value])
+
+  function change(nextHours: string, nextMinutes: string) {
+    setHours(nextHours)
+    setMinutes(nextMinutes)
+    const total = nextHours === '' && nextMinutes === ''
+      ? null
+      : Number(nextHours) * 60 + Number(nextMinutes)
+    written.current = total
+    commit(total)
+  }
+
+  return { hours, minutes, change }
+}
+
 /**
  * Shell shared by all daily-state cards.
  * Handles the OK-button countdown, error display, and the card styling states.
@@ -240,7 +290,12 @@ function DailyStateCardShell({
 }) {
   const snap = useStoreSnapshot()
   const save = snap.cards[cardId]
-  const readiness = useCardReadiness({ ...save, filled, completed: inCompletedSection,
+  // `stored` tracks whether this card's value has already reached the server,
+  // independently of the current draft (`filled`), so the «ОК» control stays
+  // put while a new edit is in flight. `savedRevision` only advances when a
+  // settled write matches the card's own latest revision.
+  const stored = save.savedRevision > 0
+  const readiness = useCardReadiness({ ...save, stored, filled, completed: inCompletedSection,
     onDone: () => snap.complete(cardId) })
   const { timerState, progress, confirmNow } = readiness
   const isCounting = timerState === 'counting'
@@ -289,10 +344,12 @@ function DailyStateCardShell({
         </p>
       ) : null}
 
-      {readiness.showActions ? (
+      {readiness.showOk ? (
         <OkButton
           progress={progress}
+          counting={isCounting}
           onConfirm={confirmNow}
+          disabled={!readiness.canConfirm}
           locked={readiness.locked}
           onToggleLock={readiness.toggleLock}
         />
@@ -371,20 +428,7 @@ function SleepCard({ isFuture, inCompletedSection }: BaseCardProps) {
   const filled =
     draft.sleep_status !== null || draft.sleep_minutes !== null
 
-  // Local hours/minutes state for the duration input.
-  const [hours, setHours] = useState(
-    draft.sleep_minutes === null ? '' : String(Math.floor(draft.sleep_minutes / 60)),
-  )
-  const [mins, setMins] = useState(
-    draft.sleep_minutes === null ? '' : String(draft.sleep_minutes % 60),
-  )
-
-  function changeDuration(h: string, m: string) {
-    setHours(h)
-    setMins(m)
-    const totalMins = h === '' && m === '' ? null : Number(h) * 60 + Number(m)
-    patch({ sleep_minutes: totalMins })
-  }
+  const duration = useDurationParts(draft.sleep_minutes, total => patch({ sleep_minutes: total }))
 
   return (
     <DailyStateCardShell
@@ -392,7 +436,7 @@ function SleepCard({ isFuture, inCompletedSection }: BaseCardProps) {
       isFuture={isFuture}
       inCompletedSection={inCompletedSection}
       filled={filled}
-      onClear={() => { setHours(''); setMins(''); clearField('sleep') }}
+      onClear={() => clearField('sleep')}
     >
       <div className="ccard__segments">
         {SLEEP_STATUS_OPTIONS.map(({ value, label }) => (
@@ -416,9 +460,9 @@ function SleepCard({ isFuture, inCompletedSection }: BaseCardProps) {
             min={0}
             max={24}
             step={1}
-            value={hours}
+            value={duration.hours}
             placeholder="0"
-            onChange={(e) => changeDuration(e.target.value, mins)}
+            onChange={(e) => duration.change(e.target.value, duration.minutes)}
           />
         </label>
         <label className="ccard__duration-label">
@@ -429,9 +473,9 @@ function SleepCard({ isFuture, inCompletedSection }: BaseCardProps) {
             min={0}
             max={59}
             step={1}
-            value={mins}
+            value={duration.minutes}
             placeholder="0"
-            onChange={(e) => changeDuration(hours, e.target.value)}
+            onChange={(e) => duration.change(duration.hours, e.target.value)}
           />
         </label>
       </div>
@@ -462,26 +506,10 @@ function BoolCard({
   const { draft, patch, clearField } = useStoreSnapshot()
   const value = draft[field]
 
-  const [durH, setDurH] = useState(() => {
-    const total = durationField ? (draft[durationField] ?? null) : null
-    return total === null ? '' : String(Math.floor(total / 60))
-  })
-  const [durM, setDurM] = useState(() => {
-    const total = durationField ? (draft[durationField] ?? null) : null
-    return total === null ? '' : String(total % 60)
-  })
-
-  const duration = durationField ? draft[durationField] : null
-  useEffect(() => {
-    if (duration === null) { setDurH(''); setDurM('') }
-  }, [duration])
-
-  function changeDuration(h: string, m: string) {
-    setDurH(h); setDurM(m)
-    if (!durationField) return
-    const total = h === '' && m === '' ? null : Number(h) * 60 + Number(m)
-    patch({ [durationField]: total })
-  }
+  const duration = useDurationParts(
+    durationField ? draft[durationField] : null,
+    total => { if (durationField) patch({ [durationField]: total }) },
+  )
 
   const filled = value !== null
 
@@ -532,9 +560,9 @@ function BoolCard({
               min={0}
               max={24}
               step={1}
-              value={durH}
+              value={duration.hours}
               placeholder="0"
-              onChange={(e) => changeDuration(e.target.value, durM)}
+              onChange={(e) => duration.change(e.target.value, duration.minutes)}
             />
           </label>
           <label className="ccard__duration-label">
@@ -545,9 +573,9 @@ function BoolCard({
               min={0}
               max={59}
               step={1}
-              value={durM}
+              value={duration.minutes}
               placeholder="0"
-              onChange={(e) => changeDuration(durH, e.target.value)}
+              onChange={(e) => duration.change(duration.hours, e.target.value)}
             />
           </label>
           {durationLabel ? (
@@ -569,18 +597,10 @@ function ComputerCard({ isFuture, inCompletedSection }: BaseCardProps) {
   const value = draft.computer_overuse
   const filled = value !== null || draft.computer_minutes !== null
 
-  const [durH, setDurH] = useState(
-    draft.computer_minutes === null ? '' : String(Math.floor(draft.computer_minutes / 60)),
+  const duration = useDurationParts(
+    draft.computer_minutes,
+    total => patch({ computer_minutes: total }),
   )
-  const [durM, setDurM] = useState(
-    draft.computer_minutes === null ? '' : String(draft.computer_minutes % 60),
-  )
-
-  function changeDuration(h: string, m: string) {
-    setDurH(h); setDurM(m)
-    const total = h === '' && m === '' ? null : Number(h) * 60 + Number(m)
-    patch({ computer_minutes: total })
-  }
 
   return (
     <DailyStateCardShell
@@ -588,7 +608,7 @@ function ComputerCard({ isFuture, inCompletedSection }: BaseCardProps) {
       isFuture={isFuture}
       inCompletedSection={inCompletedSection}
       filled={filled}
-      onClear={() => { setDurH(''); setDurM(''); clearField('computer') }}
+      onClear={() => clearField('computer')}
     >
       <div className="ccard__segments">
         <button
@@ -617,9 +637,9 @@ function ComputerCard({ isFuture, inCompletedSection }: BaseCardProps) {
             min={0}
             max={24}
             step={1}
-            value={durH}
+            value={duration.hours}
             placeholder="0"
-            onChange={(e) => changeDuration(e.target.value, durM)}
+            onChange={(e) => duration.change(e.target.value, duration.minutes)}
           />
         </label>
         <label className="ccard__duration-label">
@@ -630,9 +650,9 @@ function ComputerCard({ isFuture, inCompletedSection }: BaseCardProps) {
             min={0}
             max={59}
             step={1}
-            value={durM}
+            value={duration.minutes}
             placeholder="0"
-            onChange={(e) => changeDuration(durH, e.target.value)}
+            onChange={(e) => duration.change(duration.hours, e.target.value)}
           />
         </label>
       </div>

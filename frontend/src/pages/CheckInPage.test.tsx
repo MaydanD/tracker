@@ -132,13 +132,49 @@ async function waitForHabits(...names: string[]): Promise<void> {
 }
 
 describe('CheckInPage', () => {
+  it('keeps the current score and expanded weekly details usable during a save refresh', async () => {
+    const initial = progressFixture(TODAY)
+    const updated = { ...initial, day: { ...initial.day, score: 100 } }
+    const pending = stalledResponse(updated)
+    let progressReads = 0
+    stubApi({
+      [`GET /api/days/${TODAY}`]: () => jsonResponse(dayPayload(TODAY, false)),
+      [`GET /api/days/${TODAY}/state`]: () => jsonResponse({ state_date: TODAY, today: TODAY, state: null }),
+      [`GET /api/progress/days/${TODAY}`]: () => ++progressReads === 1 ? jsonResponse(initial) : pending.response,
+      [`PUT /api/habits/1/entries/${TODAY}`]: () => jsonResponse(entryFixture({ status: 'done', skip_reason: null })),
+    })
+    render(<CheckInPage />)
+    await waitForHabits('Reading')
+    const scores = await screen.findByRole('region', { name: 'Показатели выполнения' })
+    const details = within(scores).getByText('Прогресс всех привычек за неделю').closest('details')!
+    fireEvent.click(within(scores).getByText('Прогресс всех привычек за неделю'))
+    expect(details.open).toBe(true)
+    chooseStatus('Reading', 'Выполнено')
+    await waitFor(() => expect(progressReads).toBe(2))
+    // Pending network work must not remove the score or reset its disclosure.
+    expect(scores).toBeVisible()
+    expect(details.open).toBe(true)
+    pending.release()
+    await waitFor(() => expect(scores).toHaveTextContent('100%'))
+    expect(details.open).toBe(true)
+  })
+
+  it('names the screen with a level-one heading that stays out of the design', async () => {
+    stubFakeApi(createFakeApi({ areas: [health], habits: [binaryHabit()] }))
+
+    render(<CheckInPage />)
+
+    await waitForHabits('Reading')
+    const heading = screen.getByRole('heading', { level: 1, name: 'Итоги дня' })
+    expect(heading).toHaveClass('sr-only')
+  })
+
   it('uses compact Russian controls without introductory copy', async () => {
     stubFakeApi(createFakeApi({ areas: [health], habits: [binaryHabit()] }))
 
     render(<CheckInPage />)
 
     await waitForHabits('Reading')
-    expect(screen.queryByRole('heading', { name: 'Итоги дня' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Сохранить' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Выполнено' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Пропущено' })).toBeInTheDocument()
@@ -215,8 +251,9 @@ describe('CheckInPage', () => {
     render(<CheckInPage />)
     await waitForHabits('Reading', 'Walking')
 
-    // No state chosen yet, so there is nothing to fill in.
-    expect(screen.queryByLabelText('Количество')).toBeNull()
+    // The quantity row is reserved from the start so marking the habit cannot
+    // grow the card — but it stays inert until a state is chosen.
+    expect(screen.getByLabelText('Количество')).toBeDisabled()
 
     // A binary habit never offers a quantity.
     chooseStatus('Reading', 'Выполнено')

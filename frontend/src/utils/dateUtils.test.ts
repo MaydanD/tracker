@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   daysInMonth,
+  formatAxisDateLabel,
   formatFullDateLabel,
   formatIsoDate,
   formatMonthTitle,
@@ -11,10 +12,37 @@ import {
   nextMonth,
   parseIsoParts,
   prevMonth,
+  spansDifferentYears,
+  tickIndexes,
   weekdayMondayFirst,
 } from './dateUtils'
 
 describe('dateUtils', () => {
+  it('spreads axis ticks over a range, always including both ends', () => {
+    expect(tickIndexes(0, 5)).toEqual([])
+    expect(tickIndexes(2, 5)).toEqual([0, 1])
+    expect(tickIndexes(5, 5)).toEqual([0, 1, 2, 3, 4])
+    const ninetyDays = tickIndexes(90, 5)
+    expect(ninetyDays).toHaveLength(5)
+    expect(ninetyDays[0]).toBe(0)
+    expect(ninetyDays.at(-1)).toBe(89)
+    expect(new Set(ninetyDays).size).toBe(5)
+    for (let index = 1; index < ninetyDays.length; index++) {
+      expect(ninetyDays[index]!).toBeGreaterThan(ninetyDays[index - 1]!)
+    }
+  })
+
+  it('keeps an axis date as short as the range allows', () => {
+    expect(formatAxisDateLabel('2026-09-27', false)).toBe('27.09')
+    expect(formatAxisDateLabel('2026-09-27', true)).toBe('27.09.26')
+    expect(formatAxisDateLabel('2025-01-05', true)).toBe('05.01.25')
+  })
+
+  it('detects a range that crosses a year boundary', () => {
+    expect(spansDifferentYears('2026-01-01', '2026-12-31')).toBe(false)
+    expect(spansDifferentYears('2025-12-01', '2026-01-31')).toBe(true)
+  })
+
   it('parses and formats ISO dates without timezone shift', () => {
     const parsed = parseIsoParts('2026-09-25')
     expect(parsed).toEqual({ year: 2026, month: 9, day: 25 })

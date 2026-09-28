@@ -159,6 +159,35 @@ export function formatShortDateLabel(iso: string): string {
 }
 
 /**
+ * Positions of the dates printed along a chart's time axis: evenly spread,
+ * never more than `max`, and always including the ends of the period. Two
+ * labels on top of each other are worse than a missing one.
+ */
+export function tickIndexes(count: number, max: number): number[] {
+  if (count <= 0 || max <= 0) return []
+  if (count <= max) return Array.from({ length: count }, (_, index) => index)
+  if (max === 1) return [count - 1]
+  const step = (count - 1) / (max - 1)
+  return [...new Set(Array.from({ length: max }, (_, index) => Math.round(index * step)))]
+}
+
+/**
+ * A date on an axis tick, as short as the range allows: `27.09` while the axis
+ * stays inside one year, `27.09.25` once it spans several.
+ */
+export function formatAxisDateLabel(iso: string, withYear: boolean): string {
+  const { year, month, day } = parseIsoParts(iso)
+  const dd = String(day).padStart(2, '0')
+  const mm = String(month).padStart(2, '0')
+  return withYear ? `${dd}.${mm}.${String(year).slice(-2)}` : `${dd}.${mm}`
+}
+
+/** True when the two ISO dates do not fall in the same calendar year. */
+export function spansDifferentYears(fromIso: string, toIso: string): boolean {
+  return parseIsoParts(fromIso).year !== parseIsoParts(toIso).year
+}
+
+/**
  * «27 сентября» for a local Date — no year and no leading zero. The header uses
  * it for today, where the year is noise.
  */

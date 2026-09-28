@@ -412,6 +412,29 @@
   stroke-width: 1;
 }
 
+/* Value gridlines: present enough to read a level off, quiet enough to ignore. */
+.insight-chart__gridline {
+  stroke: #eceff3;
+  stroke-width: 1;
+}
+
+/* The covered range, next to the chart title. */
+.insight-chart__period {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/* Nothing to draw: a statement instead of a set of bare axes. */
+.insight-chart__empty {
+  margin: 0;
+  padding: 22px 8px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
 .insight-chart__line {
   fill: none;
   stroke: var(--color-accent);
@@ -498,6 +521,53 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+.insight-chart__legend-note {
+  flex-basis: 100%;
+}
+
+/* Legend keys echo the real marks: line style for the lines, colour for bars. */
+.insight-chart__key {
+  display: inline-block;
+  width: 16px;
+  border-top: 2px solid var(--color-accent);
+}
+
+.insight-chart__key--rolling {
+  border-top: 1px dashed #8f9dad;
+}
+
+.insight-chart__key--rolling-alt {
+  border-top: 1px dotted #8f9dad;
+}
+
+.insight-chart__swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1px solid;
+  border-radius: 2px;
+}
+
+.insight-chart__swatch--pass {
+  background: #d8f0e2;
+  border-color: #6cb98a;
+}
+
+.insight-chart__swatch--pass_with_warnings {
+  background: #fdefd6;
+  border-color: #d9a350;
+}
+
+.insight-chart__swatch--blocked {
+  background: #f8dcdc;
+  border-color: #cf3b3b;
+}
+
+.insight-chart__swatch--not_evaluable {
+  background: #eceef1;
+  border-color: #b6bcc4;
 }
 
 .insight-chart__tick,

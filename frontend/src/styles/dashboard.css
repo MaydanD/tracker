@@ -277,6 +277,15 @@
   font-weight: 650;
 }
 
+/*
+ * No run: the value is stated quietly instead of wearing the colour the
+ * dashboard uses for a series that is actually going.
+ */
+.dashboard-streak__value--none {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
 @media (max-width: 960px) {
   .dashboard-page {
     grid-template-areas:

@@ -27,6 +27,10 @@ export function SettingsPage() {
   const [restored, setRestored] = useState(wasRestored)
   const generation = useRef(0)
   const picker = useRef<HTMLInputElement>(null)
+  // The native input keeps its file-dialog behaviour and stays keyboard
+  // reachable; only the visible control around it is styled like the rest of
+  // the app, so the restore card never shows a bare browser file widget.
+  const pickerDisabled = busy === 'restoring' || busy === 'download'
   useEffect(() => {
     try { sessionStorage.removeItem('tracker:restore-success') } catch { /* optional flash */ }
     return () => { generation.current += 1 }
@@ -109,11 +113,15 @@ export function SettingsPage() {
         </section>
         <section className="card card--wide" aria-labelledby="restore-title" aria-busy={busy === 'restoring'}>
           <h2 id="restore-title">Восстановление</h2>
-          <label className="field">Выбрать файл резервной копии
-            <input ref={picker} type="file" accept=".zip,application/zip" disabled={busy === 'restoring' || busy === 'download'}
+          <p>Выберите ZIP-файл резервной копии Tracker. Содержимое проверяется до замены данных.</p>
+          <div className={pickerDisabled ? 'file-picker file-picker--disabled' : 'file-picker'}>
+            <input ref={picker} id="restore-backup-file" className="file-picker__input" type="file"
+              accept=".zip,application/zip" disabled={pickerDisabled}
+              aria-label="Выбрать файл резервной копии"
               onChange={(event) => void selectFile(event.target.files?.[0] ?? null)} />
-          </label>
-          {file && <p>Выбран файл: {file.name}</p>}
+            <label className="button file-picker__button" htmlFor="restore-backup-file">Выбрать файл</label>
+            <span className="file-picker__name" aria-live="polite">{file ? file.name : 'Файл не выбран'}</span>
+          </div>
           {busy === 'checking' && <p role="status">Проверяем резервную копию…</p>}
           {preview && <div>
             <h3>Резервная копия от {new Date(preview.manifest.created_at + (/Z|[+-]\d\d:\d\d$/.test(preview.manifest.created_at) ? '' : 'Z')).toLocaleString('ru-RU')}</h3>

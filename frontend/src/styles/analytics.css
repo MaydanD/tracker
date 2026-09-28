@@ -22,6 +22,12 @@
   padding-top: 18px;
 }
 
+/** The range every chart below covers, stated once at the section header. */
+.analytics-trends__period {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
 .analytics-trend-groups {
   display: flex;
   flex-direction: column;

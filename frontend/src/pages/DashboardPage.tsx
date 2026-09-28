@@ -118,7 +118,13 @@ export function DashboardPage() {
               return (
                 <li key={streak.habit_id} className="dashboard-streak">
                   <span className="dashboard-streak__name">{habitName}</span>
-                  <span className="dashboard-streak__value">{formatStreakText(streak.current_streak, streak.unit)}</span>
+                  <span
+                    className={streak.current_streak > 0
+                      ? 'dashboard-streak__value'
+                      : 'dashboard-streak__value dashboard-streak__value--none'}
+                  >
+                    {formatStreakText(streak.current_streak, streak.unit)}
+                  </span>
                 </li>
               )
             })}

@@ -24,6 +24,8 @@ export function StreakLabel({ streak }: { streak: HabitStreak }) {
     ? { one: 'день', few: 'дня', many: 'дней', other: 'дней' }
     : { one: 'неделя', few: 'недели', many: 'недель', other: 'недель' }
   const unit = labels[plural as keyof typeof labels] ?? labels.other
+  // No run, no flame: «0 дней» with a fire still reads as a series that exists.
+  if (n <= 0) return <span>Нет серии · на {formatDayLabel(streak.as_of)}</span>
   return <span>🔥 {n} {unit} · серия на {formatDayLabel(streak.as_of)}</span>
 }
 

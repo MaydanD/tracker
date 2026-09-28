@@ -15,7 +15,69 @@
 .data-count dd { font-variant-numeric: tabular-nums; }
 .restore-confirm { border: 2px solid var(--color-accent); padding: 12px; border-radius: var(--radius); }
 
+/*
+ * File picker used by the restore card. The native input keeps its file-dialog
+ * behaviour and stays reachable by keyboard, but is invisible; the label next to
+ * it looks like a button and receives the focus ring on its behalf.
+ */
+.file-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.file-picker__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.file-picker__button {
+  display: inline-flex;
+  align-items: center;
+}
+
+.file-picker--disabled .file-picker__button {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.file-picker__input:focus + .file-picker__button {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  outline: 2px solid rgba(47, 111, 208, 0.2);
+}
+
+.file-picker__name {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+
 /* -- layout helpers --------------------------------------------------------- */
+
+/*
+ * Present to assistive technology, absent from the layout: used for the page
+ * heading of a screen whose design is a grid of cards with no visible title.
+ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 
 .toolbar {
   display: flex;
