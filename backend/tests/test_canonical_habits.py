@@ -186,6 +186,26 @@ class TestEditableLikeAnyOtherHabit:
         assert client.post(f"/api/habits/{target['id']}/unarchive").status_code == 200
         assert len(client.get("/api/habits").json()) == 24
 
+    def test_a_renamed_and_recoloured_area_survives_a_reconcile(
+        self, client: TestClient, session: Session, reconciled
+    ) -> None:
+        """The shipped areas are ordinary areas: reconciliation never rewrites them."""
+        area = client.get("/api/areas").json()[0]
+        assert client.patch(
+            f"/api/areas/{area['id']}", json={"name": "Здоровье", "color": "#123456"}
+        ).status_code == 200
+
+        again = canonical.reconcile_canonical(session, today=today_local())
+        assert not again.changed
+
+        session.expire_all()
+        row = session.get(Area, area["id"])
+        assert row is not None
+        # The user's own name, colour and display position are untouched.
+        assert (row.name, row.color, row.sort_order) == ("Здоровье", "#123456", 1)
+        reread = client.get(f"/api/areas/{area['id']}").json()
+        assert (reread["name"], reread["color"]) == ("Здоровье", "#123456")
+
 
 class TestRetirement:
     def _pre_canonical_habit(self, session: Session) -> Habit:

@@ -30,6 +30,22 @@ function chooseSchedule(label: RegExp): void {
   fireEvent.click(screen.getByLabelText(label))
 }
 
+/** A habit configured with the legacy «количество» mode, as old data holds it. */
+function quantityHabit() {
+  return habitFixture({
+    id: 1,
+    name: 'Walking',
+    area_id: 1,
+    tracking_mode: 'binary_quantity',
+    quantity_unit: 'km',
+  })
+}
+
+async function openEditor(): Promise<void> {
+  fireEvent.click(await screen.findByRole('button', { name: 'Изменить' }))
+  await screen.findByLabelText('Название')
+}
+
 describe('HabitsPage', () => {
   it('shows empty areas and creates a habit directly inside the chosen area', async () => {
     const api = createFakeApi({ areas: [health, development] })
@@ -98,20 +114,18 @@ describe('HabitsPage', () => {
   it('shows server field validation in Russian and preserves the draft', async () => {
     stubApi({
       'GET /api/areas': () => jsonResponse([health]),
-      'GET /api/habits': () => jsonResponse([]),
-      'POST /api/habits': () => jsonResponse({ error: {
+      'GET /api/habits': () => jsonResponse([quantityHabit()]),
+      'PUT /api/habits/1': () => jsonResponse({ error: {
         code: 'validation_error', message: 'The request payload is invalid.',
         details: { errors: [{ loc: ['body', 'quantity_unit'], type: 'string_too_long',
           msg: 'String should have at most 32 characters', ctx: { max_length: 32 } }] },
       } }, 422),
     })
     render(<HabitsPage />)
-    await openCreateForm()
+    await openEditor()
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Чтение' } })
-    chooseArea(1)
-    chooseSchedule(QUANTITY)
     fireEvent.change(screen.getByLabelText('Единица измерения'), { target: { value: 'страницы' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Создать привычку' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить изменения' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Проверьте заполненные поля. Единица измерения: не более 32 символов.',
@@ -153,8 +167,9 @@ describe('HabitsPage', () => {
 
     expect(await screen.findByText('Reading')).toBeInTheDocument()
     expect(screen.getByText('Exercise')).toBeInTheDocument()
-    // Both habits are ordinary: importance is `normal` unless the user changes it.
-    expect(screen.getAllByText('Важность: Обычная')).toHaveLength(2)
+    // «Важность» is the score weight: ordinary (1) and important (2).
+    expect(screen.getByText('Важность: Обычная')).toBeInTheDocument()
+    expect(screen.getByText('Важность: Важная')).toBeInTheDocument()
     expect(screen.getByText('Количество (pages)')).toBeInTheDocument()
     expect(screen.getByText('Пн, Ср, Пт (3 раза в неделю)')).toBeInTheDocument()
     expect(screen.getAllByText(/Версия 1 с 01.09.2026/).length).toBeGreaterThan(0)
@@ -182,57 +197,64 @@ describe('HabitsPage', () => {
     expect(created?.area_id).toBe(1)
   })
 
-  it('creates a quantity habit with a unit', async () => {
-    const api = createFakeApi({ areas: [health] })
-    stubFakeApi(api)
+  it('does not offer «количество» for a new habit', async () => {
+    stubFakeApi(createFakeApi({ areas: [health] }))
 
     render(<HabitsPage />)
     await openCreateForm()
 
-    fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Walking' } })
-    chooseArea(1)
-    chooseSchedule(QUANTITY)
+    // A plain value scale covers what the old mode expressed, so a new habit
+    // never chooses it; the completion and scale kinds remain.
+    expect(screen.queryByLabelText(QUANTITY)).not.toBeInTheDocument()
+    expect(screen.getByLabelText(BINARY)).toBeInTheDocument()
+    expect(screen.getByLabelText(VALUE_FOUR)).toBeInTheDocument()
+    expect(screen.queryByLabelText('Единица измерения')).toBeNull()
+  })
 
+  it('still edits a legacy quantity habit and keeps its unit', async () => {
+    const api = createFakeApi({ areas: [health], habits: [quantityHabit()] })
+    stubFakeApi(api)
+
+    render(<HabitsPage />)
+    await openEditor()
+
+    // The legacy mode stays offered for a habit that already uses it.
+    expect(screen.getByLabelText(QUANTITY)).toBeInTheDocument()
     const unit = screen.getByLabelText('Единица измерения')
     fireEvent.change(unit, { target: { value: 'km' } })
     fireEvent.click(screen.getByLabelText('Разрешить дробные значения'))
-    fireEvent.click(screen.getByRole('button', { name: 'Создать привычку' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить изменения' }))
 
-    await waitFor(() => expect(api.habits).toHaveLength(1))
+    await waitFor(() => expect(api.habits[0]?.quantity_allows_decimal).toBe(true))
     expect(api.habits[0]?.tracking_mode).toBe('binary_quantity')
     expect(api.habits[0]?.quantity_unit).toBe('km')
-    expect(api.habits[0]?.quantity_allows_decimal).toBe(true)
     expect(await screen.findByText('Количество (km)')).toBeInTheDocument()
   })
 
-  it('requires a unit for quantity habits', async () => {
-    const api = createFakeApi({ areas: [health] })
+  it('still requires a unit for a legacy quantity habit', async () => {
+    const api = createFakeApi({ areas: [health], habits: [quantityHabit()] })
     stubFakeApi(api)
 
     render(<HabitsPage />)
-    await openCreateForm()
+    await openEditor()
 
-    fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Walking' } })
-    chooseArea(1)
-    chooseSchedule(QUANTITY)
-    fireEvent.click(screen.getByRole('button', { name: 'Создать привычку' }))
+    fireEvent.change(screen.getByLabelText('Единица измерения'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить изменения' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Укажите единицу измерения',
     )
-    expect(api.habits).toHaveLength(0)
+    // Nothing was saved: the habit keeps its single version.
+    expect(api.habits[0]?.current_version.version_number).toBe(1)
   })
 
   it('does not show quantity fields for binary habits', async () => {
-    const api = createFakeApi({ areas: [health] })
-    stubFakeApi(api)
+    stubFakeApi(createFakeApi({ areas: [health] }))
 
     render(<HabitsPage />)
     await openCreateForm()
 
     expect(screen.queryByLabelText('Единица измерения')).toBeNull()
-    chooseSchedule(QUANTITY)
-    expect(screen.getByLabelText('Единица измерения')).toBeInTheDocument()
     chooseSchedule(BINARY)
     expect(screen.queryByLabelText('Единица измерения')).toBeNull()
   })
@@ -358,24 +380,28 @@ describe('HabitsPage', () => {
 
     expect(screen.getByLabelText('Название')).toHaveValue('Reading')
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Deep reading' } })
-    fireEvent.change(screen.getByLabelText('Важность'), { target: { value: 'high' } })
+    // Exactly one «Важность» control, and it is the score weight (1/2/3).
+    fireEvent.change(screen.getByLabelText('Важность'), { target: { value: '3' } })
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить изменения' }))
 
     expect(await screen.findByText('Deep reading')).toBeInTheDocument()
-    expect(api.habits[0]?.importance).toBe('high')
-    expect(api.habits[0]?.weight).toBe(1)
+    expect(api.habits[0]?.weight).toBe(3)
+    // The legacy importance column is preserved, not rewritten by the weight edit.
+    expect(api.habits[0]?.importance).toBe('normal')
     expect(api.habits[0]?.current_version.version_number).toBe(2)
-    expect(screen.getByText('Важность: Высокая')).toBeInTheDocument()
+    expect(screen.getByText('Важность: Ключевая')).toBeInTheDocument()
   })
 
-  it('creates a habit with an ordinary importance by default', async () => {
+  it('offers one «Важность» control, ordinary by default', async () => {
     const api = createFakeApi({ areas: [health] })
     stubFakeApi(api)
 
     render(<HabitsPage />)
     await openCreateForm()
 
-    expect(screen.getByLabelText('Важность')).toHaveValue('normal')
+    // There is no second, near-identical regulator next to it.
+    expect(screen.getByLabelText('Важность')).toHaveValue('1')
+    expect(screen.queryByLabelText('Вес в оценке')).toBeNull()
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Reading' } })
     chooseArea(1)
     fireEvent.click(screen.getByRole('button', { name: 'Создать привычку' }))
@@ -431,6 +457,41 @@ describe('HabitsPage', () => {
     expect(api.habits[0]?.value_labels).toEqual(['нет', 'да'])
     expect(api.habits[0]?.direction).toBe('neutral')
     expect(await screen.findByText('Ответ: да / нет')).toBeInTheDocument()
+  })
+
+  it('refuses a scale whose words repeat', async () => {
+    const api = createFakeApi({ areas: [health] })
+    stubFakeApi(api)
+
+    render(<HabitsPage />)
+    await openCreateForm()
+
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Настроение' } })
+    chooseArea(1)
+    chooseSchedule(VALUE_FOUR)
+    const words = ['норм', 'норм', 'хорошо', 'хорошо']
+    words.forEach((word, index) => {
+      fireEvent.change(screen.getByLabelText(`Значение ${index}`), {
+        target: { value: word },
+      })
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Создать привычку' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Слова шкалы должны различаться.')
+    expect(api.habits).toHaveLength(0)
+  })
+
+  it('names the habit direction in human words', async () => {
+    stubFakeApi(createFakeApi({ areas: [health] }))
+
+    render(<HabitsPage />)
+    await openCreateForm()
+    chooseSchedule(VALUE_FOUR)
+
+    const direction = screen.getByLabelText('Направление')
+    expect(within(direction).getByRole('option', { name: /Полезная/ })).toBeInTheDocument()
+    expect(within(direction).getByRole('option', { name: /Вредная/ })).toBeInTheDocument()
+    expect(within(direction).getByRole('option', { name: /Нейтральная/ })).toBeInTheDocument()
   })
 
   it('requires a word for every position of a value scale', async () => {

@@ -2,12 +2,12 @@
  * Presentation vocabulary for habit configuration.
  *
  * Weekday numbers must match the API contract: ISO days, 0 = Monday … 6 = Sunday.
- * The importance, mark-kind and direction labels are product wording
+ * The weight, mark-kind and direction labels are product wording
  * (PROJECT-SPEC.md §4.2, §4.3); the underlying rules stay enforced by the
  * backend domain layer.
  */
 
-import type { Direction, Importance, ScheduleRead, ValueType } from '../../api/types'
+import type { Direction, ScheduleRead, ValueType } from '../../api/types'
 
 export interface Option<T> {
   value: T
@@ -26,18 +26,13 @@ export const WEEKDAY_OPTIONS: Option<number>[] = [
 ]
 
 /**
- * Importance: how much the habit matters to the user.
+ * Важность — the one user-facing "how much does this habit matter" control.
  *
- * Not to be confused with direction, which says which end of a value scale is
- * good. Importance is independent of the historical score weight.
+ * It is the historical score coefficient (1 ordinary, 2 important, 3 key), and
+ * it is the only such control the user is asked to set. The model's separate
+ * `importance` column is kept for backwards compatibility and for the analytics
+ * catalogue, but it is not a second regulator the user has to choose.
  */
-export const IMPORTANCE_OPTIONS: Option<Importance>[] = [
-  { value: 'low', label: 'Низкая' },
-  { value: 'normal', label: 'Обычная' },
-  { value: 'high', label: 'Высокая' },
-]
-
-/** Historical score coefficients, unchanged. */
 export const WEIGHT_OPTIONS: Option<number>[] = [
   { value: 1, label: 'Обычная' },
   { value: 2, label: 'Важная' },
@@ -49,16 +44,16 @@ export const WEIGHT_OPTIONS: Option<number>[] = [
  *
  * Completion answers *whether* the habit happened; a value scale answers *how
  * much*, on a scale of two (да/нет) or four (0…3) positions.
+ *
+ * `quantity` is legacy: it is only offered while editing a habit that already
+ * tracks a quantity, so existing data stays editable without new habits ever
+ * choosing it. A plain 0 / 1 / 2 / 3 scale covers what it used to express.
  */
 export type MarkKind = 'completion' | 'quantity' | 'binary' | 'ordinal_4'
 
+/** Offered for a new habit: completion, да/нет, or a four-value scale. */
 export const MARK_KIND_OPTIONS: Option<MarkKind>[] = [
   { value: 'completion', label: 'Выполнено / пропущено' },
-  {
-    value: 'quantity',
-    label: 'Выполнено и количество',
-    hint: 'Можно просто отметить выполнение или дополнительно указать количество.',
-  },
   {
     value: 'binary',
     label: 'Да / нет',
@@ -70,6 +65,26 @@ export const MARK_KIND_OPTIONS: Option<MarkKind>[] = [
     hint: 'Например «0 / мало / нормально / много».',
   },
 ]
+
+/**
+ * The mark kinds a habit may be given.
+ *
+ * «Выполнено и количество» is a legacy configuration: it stays offered for a
+ * habit that already uses it (so its unit and decimal rule remain editable)
+ * and is never offered for a new one.
+ */
+export function markKindOptions(kind: MarkKind): Option<MarkKind>[] {
+  if (kind !== 'quantity') return MARK_KIND_OPTIONS
+  return [
+    MARK_KIND_OPTIONS[0]!,
+    {
+      value: 'quantity',
+      label: 'Выполнено и количество (устаревший тип)',
+      hint: 'Оставлен для привычек, созданных раньше. Новая привычка вместо него использует шкалу.',
+    },
+    ...MARK_KIND_OPTIONS.slice(1),
+  ]
+}
 
 /** The value scale a mark kind is answered on, or null for a completion. */
 export function valueTypeOf(kind: MarkKind): ValueType | null {
@@ -88,17 +103,17 @@ export const DEFAULT_SCALE_LABELS: Record<ValueType, string[]> = {
 }
 
 /**
- * Which end of a scale is good.
+ * Which end of a scale is good — «Полезная / Вредная / Нейтральная».
  *
  * Analytic metadata: it says nothing about how much the habit matters (that is
- * importance). There is deliberately no default that flatters the habit — a new
- * value habit starts at «без оценки лучше/хуже», because guessing «больше —
- * лучше» would quietly bias a future score.
+ * importance/weight). There is deliberately no default that flatters the habit —
+ * a new value habit starts neutral, because guessing «больше — лучше» would
+ * quietly bias a future score.
  */
 export const DIRECTION_OPTIONS: Option<Direction>[] = [
-  { value: 'neutral', label: 'Без оценки лучше/хуже' },
-  { value: 'positive', label: 'Чем больше, тем лучше' },
-  { value: 'negative', label: 'Чем больше, тем хуже' },
+  { value: 'positive', label: 'Полезная — больше значит лучше' },
+  { value: 'negative', label: 'Вредная — меньше значит лучше' },
+  { value: 'neutral', label: 'Нейтральная — просто отслеживание' },
 ]
 
 /** The completion side of a mark, as the daily-state cards still use it. */
@@ -123,12 +138,6 @@ export const SCHEDULE_TYPE_OPTIONS: Option<string>[] = [
 
 export function weightLabel(weight: number): string {
   return WEIGHT_OPTIONS.find((option) => option.value === weight)?.label ?? String(weight)
-}
-
-export function importanceLabel(importance: Importance): string {
-  return (
-    IMPORTANCE_OPTIONS.find((option) => option.value === importance)?.label ?? importance
-  )
 }
 
 export function markKindLabel(kind: MarkKind): string {

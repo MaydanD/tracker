@@ -182,7 +182,16 @@ function useStore(): StoreType {
   if (!store) throw new Error('DailyStateCard must be inside DailyStateProvider')
   return store
 }
-export function useInitialDailyState() { return useStore().initial }
+/**
+ * The day's stored daily state, or an empty one when the grid does not show it.
+ *
+ * The check-in screen turns the separate daily-state cards off, so it mounts no
+ * provider and must not wait for that endpoint before rendering the habits.
+ */
+export function useInitialDailyState() {
+  const store = useContext(DailyStateContext)
+  return store?.initial ?? emptyDailyState()
+}
 function useStoreSnapshot(): DailyStateStore {
   const store = useStore()
   return useSyncExternalStore(store.subscribe, store.getSnapshot)

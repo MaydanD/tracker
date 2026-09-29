@@ -189,6 +189,13 @@ def normalise_value_labels(
         )
     if any(not label for label in cleaned):
         raise InvalidValueLabelsError("A value label cannot be blank.")
+    # Two positions with the same word would be indistinguishable on the
+    # check-in screen, so the scale itself would lose a level.
+    if len(set(cleaned)) != len(cleaned):
+        raise InvalidValueLabelsError(
+            "Every value label must be different.",
+            details={"labels": list(cleaned)},
+        )
     too_long = [label for label in cleaned if len(label) > VALUE_LABEL_MAX_LENGTH]
     if too_long:
         raise InvalidValueLabelsError(

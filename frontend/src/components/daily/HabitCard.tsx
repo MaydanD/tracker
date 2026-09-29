@@ -5,7 +5,7 @@ import { deleteDailyEntry, saveDailyEntry } from '../../api/daily'
 import type { DailyEntry, DailyEntryInput, DayItem, EntryStatus } from '../../api/types'
 import { useCardReadiness } from '../../hooks/useCardReadiness'
 import { OkButton } from './OkButton'
-import { importanceLabel, scheduleLabel } from '../habits/options'
+import { scheduleLabel, weightLabel } from '../habits/options'
 import { DIRECTION_LABEL } from './direction'
 import { DAILY_STATUS_OPTIONS, statusActionLabel, statusLabel } from './status'
 
@@ -91,17 +91,39 @@ function buildInput(
   }
 }
 
-/** The words of a value scale, defaulting to the position when none are stored. */
+/**
+ * Whether a habit is answered with a value rather than a completion.
+ *
+ * Only the two known scale types count. An item that carries no scale (an API
+ * that predates them, or a habit that never had one) is a completion habit: it
+ * must never be rendered as an invented 0 / 1 / 2 / 3 scale.
+ */
+export function tracksValueType(valueType: DayItem['value_type']): boolean {
+  return valueType === 'binary' || valueType === 'ordinal_4'
+}
+
+/** How many positions a scale has (2 for binary, 4 for ordinal_4), or null. */
+function scaleLength(item: DayItem): number | null {
+  if (item.value_type === 'binary') return 2
+  if (item.value_type === 'ordinal_4') return 4
+  return null
+}
+
+/**
+ * The words of a value scale, in order.
+ *
+ * The stored labels are the authority; digits are only ever a last-resort
+ * placeholder for a position a configuration forgot, never a replacement for
+ * the user's own words.
+ */
 function valueLabels(item: DayItem): string[] {
-  const max = item.value_type === 'binary' ? 1 : 3
   const stored = item.value_labels ?? []
-  return Array.from({ length: max + 1 }, (_, value) => stored[value] ?? String(value))
+  return Array.from({ length: scaleLength(item) ?? 0 }, (_, value) => stored[value] ?? String(value))
 }
 
 /** Every value of a scale, in order: `0..1` for binary, `0..3` for ordinal_4. */
 function valueOptions(item: DayItem): number[] {
-  const max = item.value_type === 'binary' ? 1 : 3
-  return Array.from({ length: max + 1 }, (_, value) => value)
+  return valueLabels(item).map((_, value) => value)
 }
 
 // ---------------------------------------------------------------------------
@@ -117,7 +139,7 @@ function StatusPill({ entry, item }: { entry: DailyEntry | null; item: DayItem }
       </span>
     )
   }
-  if (item.value_type !== null) {
+  if (tracksValueType(item.value_type)) {
     // The label of the chosen position — a recorded 0 shows as its own word,
     // never as an empty card.
     return (
@@ -166,7 +188,7 @@ function HabitCardEditor({
   const [error, setError] = useState<string | null>(null)
 
   const tracksQuantity = item.tracking_mode === 'binary_quantity'
-  const tracksValue = item.value_type !== null
+  const tracksValue = tracksValueType(item.value_type)
   const mounted = useRef(true)
   const generation = useRef(0)
   const queue = useRef(Promise.resolve())
@@ -335,7 +357,7 @@ function HabitCardEditor({
           className="ccard__name"
           title={[
             scheduleLabel(item.schedule),
-            `Важность: ${importanceLabel(item.importance)}`,
+            `Важность: ${weightLabel(item.weight)}`,
             item.direction === null ? null : DIRECTION_LABEL[item.direction],
           ]
             .filter(Boolean)
@@ -346,10 +368,12 @@ function HabitCardEditor({
             style={{ backgroundColor: item.area.color }}
             aria-hidden="true"
           />
-          <span className="ccard__name-text" title={scheduleLabel(item.schedule)}>{item.name}</span>
-          {item.importance !== 'normal' ? (
-            <span className="badge badge--muted" title={`Важность: ${importanceLabel(item.importance)}`}>
-              {item.importance === 'high' ? 'высокая' : 'низкая'}
+          <span className="ccard__name-text" title={`${item.name} · ${scheduleLabel(item.schedule)}`}>
+            {item.name}
+          </span>
+          {item.weight > 1 ? (
+            <span className="badge badge--muted" title={`Важность: ${weightLabel(item.weight)}`}>
+              {weightLabel(item.weight).toLowerCase()}
             </span>
           ) : null}
           {item.is_archived ? (

@@ -150,6 +150,58 @@ def test_archive_does_not_forgive_last_failed_day_or_started_week():
     assert current_streak(weekly, MON + timedelta(days=40)).current_streak == 0
 
 
+def test_streak_evaluates_each_day_under_the_version_of_that_day():
+    """A binary → value-scale change keeps historical days readable.
+
+    Each day is judged by the configuration in force *then*: the two binary days
+    count as completions, and the two scale days count because an answer was
+    recorded — including a recorded ``0``.
+    """
+    v1 = Version(MON, "Чтение", 1, DAILY)
+    v2 = Version(MON + timedelta(days=2), "Чтение", 1, DAILY,
+                 tracks_value=True, value_type="ordinal_4", direction="positive")
+    today = MON + timedelta(days=3)
+    h = HabitHistory(1, (v1, v2), {MON: "done", MON + timedelta(days=1): "done"}, None,
+                     {MON + timedelta(days=2): 0, MON + timedelta(days=3): 3})
+    assert current_streak(h, today).current_streak == 4
+
+    # A scale day without an answer breaks the run, exactly as a missing
+    # completion always has; the recorded ``0`` day still counts.
+    without_answer = HabitHistory(
+        1, (v1, v2), {MON: "done", MON + timedelta(days=1): "done"}, None,
+        {MON + timedelta(days=2): 0},
+    )
+    assert current_streak(without_answer, today).current_streak == 3
+
+
+def test_neutral_value_habit_never_moves_the_weekly_score():
+    """A neutral scale (Секс, Кофе) has no better end, so it cannot score.
+
+    Both the numerator and the denominator are zero. That is why an audit that
+    suspected a neutral habit corrupts the weekly score via ``completed *= 0``
+    is a false positive: there is no non-zero component for the zero to corrupt,
+    and the recorded answers stay visible as progress only.
+    """
+    v = Version(MON, "Кофе", 3, WEEKLY, tracks_value=True,
+                value_type="ordinal_4", direction="neutral")
+    h = HabitHistory(1, (v,), {}, None, {MON: 3, MON + timedelta(days=1): 0})
+    p = week_habit_progress(h, MON, MON + timedelta(days=7))
+    assert (p.completed_weight, p.required_weight) == (0, 0)
+    assert (p.weekly_quota, p.weekly_completed_count) == (3, 2)
+    assert p.status == "failed"
+    assert week_progress((h,), MON, MON + timedelta(days=7)).score is None
+
+
+def test_positive_value_habit_does_move_the_weekly_score():
+    """The neutral result above is about direction, not about value habits."""
+    v = Version(MON, "Чтение", 2, WEEKLY, tracks_value=True,
+                value_type="ordinal_4", direction="positive")
+    h = HabitHistory(1, (v,), {}, None, {MON: 3, MON + timedelta(days=1): 0})
+    p = week_habit_progress(h, MON, MON + timedelta(days=7))
+    assert p.required_weight == 6
+    assert p.completed_weight == pytest.approx(2)
+
+
 def test_schedule_unit_change_restarts_daily_streak():
     h = history(done=range(10), versions=[Version(MON, "Спорт", 1, WEEKLY), Version(MON + timedelta(days=7), "Спорт", 1, DAILY)])
     streak = current_streak(h, MON + timedelta(days=9))

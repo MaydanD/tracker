@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import type { DailyEntry, DayItem, ProgressState } from '../../api/types'
-import { HabitCard } from './HabitCard'
+import { HabitCard, tracksValueType } from './HabitCard'
 import { DAILY_STATE_CARD_IDS, DailyStateCard, DailyStateProvider, isDailyStateCardFilled,
   useInitialDailyState, type DailyStateCardId } from './DailyStateCards'
 import { resolveOwlAsset } from '../owl/owlAssets'
@@ -35,7 +35,7 @@ export interface CheckInGridProps {
  */
 function answered(item: DayItem): boolean {
   if (item.entry === null) return false
-  return item.value_type === null || item.entry.value !== null
+  return !tracksValueType(item.value_type) || item.entry.value !== null
 }
 
 /** The habits or spheres of one date, answered card by card. */
@@ -60,8 +60,13 @@ function GridResource(props: CheckInGridProps) {
     props.onChanged()
   }, [props.onChanged])
   const onCompleted = useCallback((id: DailyStateCardId) => events.current(`ds:${id}`, true), [])
+  const cards = <GridCards {...props} events={events} />
+  // Without the separate daily-state cards there is nothing to read, so the grid
+  // must not wait for that endpoint: it used to hold back every habit card
+  // behind a «Загрузка состояния дня…» that this screen never needed.
+  if (props.includeDailyState === false) return cards
   return <DailyStateProvider date={props.entryDate} onSettled={onSettled} onCompleted={onCompleted}>
-    <GridCards {...props} events={events} />
+    {cards}
   </DailyStateProvider>
 }
 function GridCards({ items, entryDate, isFuture, onChanged, events,

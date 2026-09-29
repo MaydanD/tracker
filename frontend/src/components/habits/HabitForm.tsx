@@ -15,10 +15,9 @@ import { HabitScheduleFields } from './HabitScheduleFields'
 import {
   DEFAULT_SCALE_LABELS,
   DIRECTION_OPTIONS,
-  IMPORTANCE_OPTIONS,
   WEIGHT_OPTIONS,
-  MARK_KIND_OPTIONS,
   markKindOf,
+  markKindOptions,
   scaleLengthOf,
   valueTypeOf,
   type MarkKind,
@@ -45,6 +44,13 @@ interface FormState {
   name: string
   description: string
   areaId: string
+  /**
+   * Legacy metadata the user no longer sets.
+   *
+   * It is carried through so saving an edit never rewrites the stored column by
+   * accident; a new habit is ordinary. The single user-facing control is weight
+   * — «Важность».
+   */
   importance: Importance
   weight: number
   /** How a day is answered: completion, quantity, or a value scale. */
@@ -118,9 +124,15 @@ function validate(state: FormState): string[] {
 
   const isValue = valueTypeOf(state.markKind) !== null
   if (isValue) {
-    const labels = state.valueLabels.slice(0, scaleLengthOf(state.markKind))
-    if (labels.some((label) => label.trim() === '')) {
+    const labels = state.valueLabels
+      .slice(0, scaleLengthOf(state.markKind))
+      .map((label) => label.trim())
+    if (labels.some((label) => label === '')) {
       problems.push('У каждого значения шкалы должно быть слово.')
+    } else if (new Set(labels).size !== labels.length) {
+      // Two positions with the same word leave the user unable to tell the
+      // answers apart on the check-in screen, so they are refused up front.
+      problems.push('Слова шкалы должны различаться.')
     }
   }
 
@@ -237,6 +249,9 @@ export function HabitForm({ areas, habit = null, areaId, onSaved, onCancel }: Ha
   // A value habit asks «how much» instead of «did it happen», so its scale, its
   // words and its direction are part of the form; a completion habit has none.
   const isValueHabit = valueTypeOf(state.markKind) !== null
+  // «Выполнено и количество» is legacy: offered only while editing a habit that
+  // already uses it, so no new habit can select it.
+  const markKinds = markKindOptions(markKindOf(habit?.tracking_mode ?? 'binary', habit?.value_type ?? null))
 
   return (
     // noValidate: browser constraint validation would silently block submission
@@ -306,35 +321,29 @@ export function HabitForm({ areas, habit = null, areaId, onSaved, onCancel }: Ha
         )}
 
         <div className="field">
-          <label className="field__label" htmlFor="habit-weight">Вес в оценке</label>
-          <select id="habit-weight" className="field__input" value={state.weight}
-            onChange={(event) => update('weight', Number(event.target.value))}>
-            {WEIGHT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </div>
-        <div className="field">
-          <label className="field__label" htmlFor="habit-importance">
+          <label className="field__label" htmlFor="habit-weight">
             Важность
           </label>
           <select
-            id="habit-importance"
+            id="habit-weight"
             className="field__input"
-            value={state.importance}
-            onChange={(event) => update('importance', event.target.value as Importance)}
+            value={state.weight}
+            onChange={(event) => update('weight', Number(event.target.value))}
           >
-            {IMPORTANCE_OPTIONS.map((option) => (
+            {WEIGHT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
           </select>
+          <span className="field__hint">Насколько привычка важна для оценки дня и недели.</span>
         </div>
       </div>
 
       <fieldset className="fieldset">
         <legend className="fieldset__legend">Тип отметки</legend>
         <div className="choice-group">
-          {MARK_KIND_OPTIONS.map((option) => (
+          {markKinds.map((option) => (
             <label key={option.value} className="choice">
               <input
                 type="radio"
@@ -395,8 +404,8 @@ export function HabitForm({ areas, habit = null, areaId, onSaved, onCancel }: Ha
                 ))}
               </select>
               <span className="field__hint">
-                Что значит большее значение. Это метаданные для аналитики, а не
-                важность привычки.
+                «Полезная» — больше значит лучше, «Вредная» — меньше значит лучше.
+                «Нейтральная» ничего не оценивает и влияет только на заполнение.
               </span>
             </div>
           </div>

@@ -1,4 +1,8 @@
 """End-to-end value semantics, historical metadata, evaluation and restoration."""
+import csv
+import io
+import json
+import zipfile
 from datetime import timedelta
 from pathlib import Path
 
@@ -43,6 +47,19 @@ def test_invalid_values_rejected_without_entry(client, app, health_area, value):
                         json={"status": "done", "value": value})
     assert result.status_code == 422, result.text
     assert client.get(f"/api/days/{app.state.clock.today()}").json()["items"][0]["entry"] is None
+
+
+def test_repeated_scale_words_are_rejected(client, health_area):
+    """Two positions with the same word would make the levels indistinguishable."""
+    response = client.post("/api/habits", json={
+        **habit_payload(area_id=health_area["id"]),
+        "value_type": "ordinal_4",
+        "value_labels": ["норм", "норм", "хорошо", "хорошо"],
+        "direction": "positive",
+    })
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "invalid_value_labels"
+    assert client.get("/api/habits").json() == []
 
 
 def test_binary_two_is_rejected(client, app, health_area):
@@ -100,6 +117,35 @@ def test_new_backup_roundtrip_preserves_zero_and_configuration(client, app, heal
     assert (version.importance, version.weight, version.direction) == ("high", 2, "negative")
     assert version.value_labels == ["ноль", "мало", "норм", "много"]
     assert data.habit_entries[0].value == 0
+    # The ZIP's own JSON keeps the zero, rather than dropping it as falsy.
+    archived = json.loads(zipfile.ZipFile(io.BytesIO(raw)).read("data.json"))
+    assert archived["habit_entries"][0]["value"] == 0
+    # The readable JSON export keeps it too.
+    exported = client.get("/api/export/json").json()
+    assert exported["data"]["habit_entries"][0]["value"] == 0
+    # And so does the CSV export: a recorded zero is 0, never an empty cell.
+    csv_zip = client.get("/api/export/csv").content
+    rows = list(csv.DictReader(io.StringIO(
+        zipfile.ZipFile(io.BytesIO(csv_zip)).read("habit_entries.csv").decode("utf-8-sig")
+    )))
+    assert rows[0]["value"] == "0"
+
+
+def test_restore_roundtrip_keeps_a_recorded_zero(client, app, health_area):
+    """value=0 → export v2 → restore → value=0, through the real endpoints."""
+    habit_id = create_value(client, health_area["id"], direction="positive")
+    today = app.state.clock.today()
+    client.put(f"/api/habits/{habit_id}/entries/{today}", json={"status": "done", "value": 0})
+    raw = client.get("/api/backup").content
+    preview = client.post("/api/backup/validate", content=raw)
+    assert preview.status_code == 200, preview.text
+    restored = client.post("/api/backup/restore", content=raw, headers={
+        "X-Tracker-Confirm-Restore": "replace",
+        "X-Tracker-Validation-Token": preview.json()["validation_token"],
+    })
+    assert restored.status_code == 200, restored.text
+    entry = client.get(f"/api/habits/{habit_id}/entries/{today}").json()
+    assert entry["value"] == 0
 
 
 def test_same_day_legacy_retired_once_and_history_preserved(client, app, session, health_area):

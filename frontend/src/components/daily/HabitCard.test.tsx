@@ -7,7 +7,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { DailyEntry, DayItem } from '../../api/types'
+import type { DailyEntry, DailyEntryInput, DayItem } from '../../api/types'
 import { jsonResponse, stubApi } from '../../test/fetchStub'
 import { dayItemFixture, dailyEntryFixture } from '../../test/fixtures'
 import { HabitCard } from './HabitCard'
@@ -134,6 +134,53 @@ describe('HabitCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Выполнено' }))
 
     await waitFor(() => expect(onSettled).toHaveBeenCalledWith(1, entry))
+  })
+
+  it('renders a day item without scale metadata as a completion habit, never as digits', () => {
+    // An API that predates value scales sends no `value_type`. Such an item is a
+    // completion habit: inventing a 0 / 1 / 2 / 3 scale would ask a question the
+    // habit never had.
+    stubApi({})
+    renderCard({ value_type: undefined as unknown as null, value_labels: null, direction: null })
+
+    expect(screen.getByRole('button', { name: 'Выполнено' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Пропущено' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '0' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '3' })).toBeNull()
+  })
+
+  it('saves only the newest of a rapid 1 → 2 → 3 sequence', async () => {
+    const bodies: DailyEntryInput[] = []
+    const releases: Array<() => void> = []
+    stubApi({
+      [`PUT /api/habits/1/entries/${TODAY}`]: (request) => {
+        const input = request.body as DailyEntryInput
+        bodies.push(input)
+        return new Promise<Response>((resolve) => {
+          releases.push(() => resolve(jsonResponse(dailyEntryFixture({
+            habit_id: 1, entry_date: TODAY, status: 'done', value: input.value ?? null,
+          }))))
+        }) as unknown as Response
+      },
+    })
+    renderCard({
+      value_type: 'ordinal_4',
+      value_labels: ['0', 'мало', 'нормально', 'много'],
+      direction: 'positive',
+    })
+
+    // Three answers chosen before any write settles: the serialized queue makes
+    // the earlier ones stale, so only the last one ever reaches the server.
+    fireEvent.click(screen.getByRole('button', { name: 'мало' }))
+    fireEvent.click(screen.getByRole('button', { name: 'нормально' }))
+    fireEvent.click(screen.getByRole('button', { name: 'много' }))
+    await waitFor(() => expect(bodies.length).toBeGreaterThan(0))
+    expect(bodies.at(-1)?.value).toBe(3)
+
+    await act(async () => releases.forEach((release) => release()))
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('много'),
+    )
   })
 
   it('keeps a value card without a value open, and treats a stored 0 as an answer', () => {
