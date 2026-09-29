@@ -58,7 +58,7 @@ CANONICAL_AREAS: tuple[CanonicalArea, ...] = (
     CanonicalArea("body", "Тело", "#2f9e5f", 1),
     CanonicalArea("development", "Развитие", "#4a7cc7", 2),
     CanonicalArea("leisure", "Досуг", "#b5891b", 3),
-    CanonicalArea("nutrition", "Питание и вещества", "#c2540a", 4),
+    CanonicalArea("nutrition", "Питание", "#c2540a", 4),
 )
 
 #: Reused label sets. ``ordinal_4`` is not one global scale, so every habit
@@ -88,11 +88,11 @@ CANONICAL_HABITS: tuple[CanonicalHabit, ...] = (
     ),
     CanonicalHabit(
         "body.mood", "body", "Настроение", _ORDINAL,
-        ("ужас", "плохо", "норм", "хорошо"), Direction.POSITIVE, 5,
+        ("ужас", "плохо", "норм", "хорошо"), Direction.NEUTRAL, 5,
     ),
     CanonicalHabit(
         "body.energy", "body", "Энергия", _ORDINAL,
-        ("нет сил", "мало", "норм", "много"), Direction.POSITIVE, 6,
+        ("нет сил", "мало", "норм", "много"), Direction.NEUTRAL, 6,
     ),
     CanonicalHabit(
         "body.sleep_quality", "body", "Качество сна", _ORDINAL,
@@ -100,7 +100,7 @@ CANONICAL_HABITS: tuple[CanonicalHabit, ...] = (
     ),
     CanonicalHabit(
         "body.symptoms", "body", "Симптомы заболевания", _ORDINAL,
-        ("нет", "слабые", "заметные", "сильные"), Direction.NEGATIVE, 8,
+        ("нет", "слабые", "заметные", "сильные"), Direction.NEUTRAL, 8,
     ),
     CanonicalHabit(
         "body.sex", "body", "Секс", _BINARY, _NO_YES, Direction.NEUTRAL, 9,
@@ -147,7 +147,7 @@ CANONICAL_HABITS: tuple[CanonicalHabit, ...] = (
         "leisure.computer", "leisure", "Просто сидел за компом", _ORDINAL,
         _ZERO_MUCH, Direction.NEUTRAL, 19,
     ),
-    # ── Питание и вещества ────────────────────────────────────────────────
+    # ── Питание ────────────────────────────────────────────────
     CanonicalHabit(
         "nutrition.normal_food", "nutrition", "Нормальное питание", _ORDINAL,
         ("0", "мало", "нормально", "хорошо"), Direction.POSITIVE, 20,

@@ -43,7 +43,7 @@ def test_startup_creates_the_shipped_habits_once(tmp_path: Path) -> None:
         "Тело",
         "Развитие",
         "Досуг",
-        "Питание и вещества",
+        "Питание",
     ]
     assert len(habits) == 24
     assert all(habit["importance"] == "normal" for habit in habits)

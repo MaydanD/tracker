@@ -38,7 +38,7 @@ describe('CheckInPage — the day’s habits', () => {
     expect(sphere('Тело')).toBeInTheDocument()
     expect(sphere('Развитие')).toBeInTheDocument()
     expect(sphere('Досуг')).toBeInTheDocument()
-    expect(sphere('Питание и вещества')).toBeInTheDocument()
+    expect(sphere('Питание')).toBeInTheDocument()
 
     // Every sphere holds exactly its own habits, in the order they arrived in.
     expect(within(sphere('Тело')).getByText('Зарядка')).toBeInTheDocument()
@@ -49,8 +49,8 @@ describe('CheckInPage — the day’s habits', () => {
     expect(within(sphere('Развитие')).getByText('Чтение')).toBeInTheDocument()
     expect(within(sphere('Развитие')).getByText('Работа')).toBeInTheDocument()
     expect(within(sphere('Досуг')).getByText('Игры')).toBeInTheDocument()
-    expect(within(sphere('Питание и вещества')).getByText('Кофе')).toBeInTheDocument()
-    expect(within(sphere('Питание и вещества')).getByText('Алкоголь')).toBeInTheDocument()
+    expect(within(sphere('Питание')).getByText('Кофе')).toBeInTheDocument()
+    expect(within(sphere('Питание')).getByText('Алкоголь')).toBeInTheDocument()
 
     expect(container.querySelectorAll('.ccard[data-habit-id]')).toHaveLength(24)
   })

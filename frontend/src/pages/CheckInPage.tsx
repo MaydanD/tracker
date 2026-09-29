@@ -14,7 +14,7 @@ import { useAsyncData } from '../hooks/useAsyncData'
  * Итоги дня — answer the day's habits for a chosen calendar date.
  *
  * The screen shows the habits that are active on that date, grouped into their
- * spheres (Тело, Развитие, Досуг, Питание и вещества). A habit answered with a
+ * spheres (Тело, Развитие, Досуг, Питание). A habit answered with a
  * completion offers «Выполнено / Не выполнено / Пропуск»; a habit answered on a
  * value scale (да/нет, 0…3) offers exactly the words the user configured, and a
  * recorded `0` is a real answer rather than a missing one. Nothing about either

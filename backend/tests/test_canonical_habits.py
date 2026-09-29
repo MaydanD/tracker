@@ -267,8 +267,8 @@ class TestValueHabitsAndTheScore:
         """Evaluation includes directed scales; completion includes all 24."""
         progress = client.get(f"/api/progress/days/{today_local().isoformat()}").json()
 
-        assert progress["day"]["required_weight"] == 18
-        assert len(progress["day"]["obligations"]) == 18
+        assert progress["day"]["required_weight"] == 15
+        assert len(progress["day"]["obligations"]) == 15
         assert progress["day"]["total_count"] == 24
         assert progress["day"]["filled_count"] == 0
 
@@ -282,11 +282,16 @@ class TestValueHabitsAndTheScore:
         assert all(item["entry"] is None for item in day["items"])
         assert {item["importance"] for item in day["items"]} == {"normal"}
 
+    @pytest.mark.parametrize("key,direction,labels", [
+        ("body.symptoms", "neutral", ["нет", "слабые", "заметные", "сильные"]),
+        ("nutrition.junk_food", "negative", ["0", "немного", "нормально", "много"]),
+        ("body.walk", "positive", ["0", "мало", "нормально", "много"]),
+    ])
     def test_an_answer_is_returned_with_its_scale_and_direction(
-        self, client: TestClient, session: Session, reconciled
+        self, client: TestClient, session: Session, reconciled, key, direction, labels
     ) -> None:
-        target = client.get("/api/habits").json()[7]  # Тело · Симптомы заболевания
-        assert target["direction"] == "negative"
+        target = next(h for h in client.get("/api/habits").json() if h["key"] == key)
+        assert target["direction"] == direction
 
         response = client.put(
             f"/api/habits/{target['id']}/entries/{today_local().isoformat()}",
@@ -298,5 +303,5 @@ class TestValueHabitsAndTheScore:
         day = client.get(f"/api/days/{today_local().isoformat()}").json()
         item = next(row for row in day["items"] if row["habit_id"] == target["id"])
         assert item["entry"]["value"] == 3
-        assert item["value_labels"] == ["нет", "слабые", "заметные", "сильные"]
-        assert item["direction"] == "negative"
+        assert item["value_labels"] == labels
+        assert item["direction"] == direction

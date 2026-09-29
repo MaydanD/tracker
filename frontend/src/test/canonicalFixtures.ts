@@ -14,7 +14,7 @@ const AREA_ROWS: Array<[string, string]> = [
   ['Тело', '#2f9e5f'],
   ['Развитие', '#4a7cc7'],
   ['Досуг', '#b5891b'],
-  ['Питание и вещества', '#c2540a'],
+  ['Питание', '#c2540a'],
 ]
 
 /** Fresh copies, so a test that edits a sphere cannot leak into the next one. */
@@ -48,10 +48,10 @@ const DEFINITIONS: Array<
   ['body.workout', 'body', 'Тренировка', 'binary', 'positive', NO_YES],
   ['body.walk', 'body', 'Прогулка', 'ordinal_4', 'positive', ZERO_MUCH],
   ['body.bicycle', 'body', 'Велосипед', 'ordinal_4', 'positive', ZERO_MUCH],
-  ['body.mood', 'body', 'Настроение', 'ordinal_4', 'positive', ['ужас', 'плохо', 'норм', 'хорошо']],
-  ['body.energy', 'body', 'Энергия', 'ordinal_4', 'positive', ['нет сил', 'мало', 'норм', 'много']],
+  ['body.mood', 'body', 'Настроение', 'ordinal_4', 'neutral', ['ужас', 'плохо', 'норм', 'хорошо']],
+  ['body.energy', 'body', 'Энергия', 'ordinal_4', 'neutral', ['нет сил', 'мало', 'норм', 'много']],
   ['body.sleep_quality', 'body', 'Качество сна', 'ordinal_4', 'positive', ['ужас', 'плохо', 'норм', 'хорошо']],
-  ['body.symptoms', 'body', 'Симптомы заболевания', 'ordinal_4', 'negative', ['нет', 'слабые', 'заметные', 'сильные']],
+  ['body.symptoms', 'body', 'Симптомы заболевания', 'ordinal_4', 'neutral', ['нет', 'слабые', 'заметные', 'сильные']],
   ['body.sex', 'body', 'Секс', 'binary', 'neutral', NO_YES],
   ['body.masturbation', 'body', 'Мастурбация', 'binary', 'neutral', NO_YES],
   ['development.reading', 'development', 'Чтение', 'ordinal_4', 'positive', ZERO_MUCH],
