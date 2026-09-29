@@ -186,6 +186,7 @@ function HabitCardEditor({
   const [savedEntry, setSavedEntry] = useState<DailyEntry | null>(item.entry)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [skipDraft, setSkipDraft] = useState<Draft | null>(null)
 
   const tracksQuantity = item.tracking_mode === 'binary_quantity'
   const tracksValue = tracksValueType(item.value_type)
@@ -199,7 +200,7 @@ function HabitCardEditor({
     // A value habit is filled by its *value*: a `0` is an answer, and a row
     // without one (a completion recorded before the habit became a scale) is
     // not, so «ОК» is never offered for a card that still needs answering.
-    filled: savedEntry !== null && (!tracksValue || savedEntry.value !== null),
+    filled: skipDraft === null && savedEntry !== null && (!tracksValue || savedEntry.value !== null),
     error, completed: inCompletedSection,
     onDone: () => onTimerDone?.(item.habit_id) })
   const { timerState, progress, confirmNow, reset } = readiness
@@ -226,7 +227,7 @@ function HabitCardEditor({
       item.quantity_allows_decimal,
       tracksValue,
     )
-    if (input === null || (newDraft.status === 'skipped' && !input.skip_reason)) {
+    if (input === null) {
       setBusy(false)
       if (
         input === null &&
@@ -257,6 +258,7 @@ function HabitCardEditor({
     })
   }
   function handleClear() {
+    setSkipDraft(null)
     const version = beginChange()
     setBusy(true)
     queue.current = queue.current.then(async () => {
@@ -281,10 +283,17 @@ function HabitCardEditor({
   // -------------------------------------------------------------------------
 
   function chooseStatus(status: EntryStatus) {
+    if (status === 'skipped') {
+      setSkipDraft({ ...draft, status, skipReason: draft.skipReason })
+      setError(null)
+      reset()
+      return
+    }
+    setSkipDraft(null)
     const next: Draft = {
       ...draft,
       status,
-      skipReason: status === 'skipped' ? draft.skipReason : '',
+      skipReason: '',
     }
     setDraft(next)
     setError(null)
@@ -303,6 +312,10 @@ function HabitCardEditor({
   }
 
   function updateExtra<K extends keyof Draft>(key: K, value: Draft[K]) {
+    if (skipDraft !== null) {
+      setSkipDraft({ ...skipDraft, [key]: value })
+      return
+    }
     const next = { ...draft, [key]: value }
     setDraft(next)
     setError(null)
@@ -434,7 +447,7 @@ function HabitCardEditor({
         <div className="ccard__actions" role="group" aria-label="Отметка привычки">
           {DAILY_STATUS_OPTIONS.map((option) => {
             const blocked = isFuture && option.value !== 'skipped'
-            const isSelected = draft.status === option.value
+            const isSelected = (skipDraft ?? draft).status === option.value
             return (
               <button
                 key={option.value}
@@ -474,7 +487,7 @@ function HabitCardEditor({
             step={item.quantity_allows_decimal ? 'any' : '1'}
             placeholder={item.quantity_unit ?? 'Количество'}
             value={draft.quantity}
-            disabled={draft.status === null || draft.status === 'skipped'}
+            disabled={skipDraft !== null || draft.status === null || draft.status === 'skipped'}
             onChange={(e) => updateExtra('quantity', e.target.value)}
           />
         </div>
@@ -494,14 +507,14 @@ function HabitCardEditor({
        * this row too, so revealing it cannot change the card's height either.
        */}
       <div className="ccard__footer">
-        {!tracksValue && draft.status === 'skipped' ? (
+        {!tracksValue && (skipDraft !== null || draft.status === 'skipped') ? (
           <input
             id={reasonId}
             aria-label="Причина пропуска"
             className="ccard__input ccard__input--note"
-            placeholder="Причина пропуска"
+            placeholder="Причина пропуска (необязательно)"
             maxLength={200}
-            value={draft.skipReason}
+            value={(skipDraft ?? draft).skipReason}
             onChange={(e) => updateExtra('skipReason', e.target.value)}
           />
         ) : null}
@@ -511,10 +524,24 @@ function HabitCardEditor({
           className="ccard__input ccard__input--note"
           placeholder="Заметка (необязательно)"
           maxLength={500}
-          value={draft.note}
-          disabled={tracksValue ? draft.value === null : draft.status === null}
+          value={(skipDraft ?? draft).note}
+          disabled={skipDraft === null && (tracksValue ? draft.value === null : draft.status === null)}
           onChange={(e) => updateExtra('note', e.target.value)}
         />
+        {skipDraft !== null ? (
+          <span role="group" aria-label="Подтвердить пропуск">
+            <button type="button" className="ccard__status-btn" onClick={() => {
+              setDraft(skipDraft)
+              setSkipDraft(null)
+              save(skipDraft)
+            }}>Да</button>
+            <button type="button" className="ccard__status-btn" onClick={() => {
+              setSkipDraft(null)
+              setError(null)
+              reset()
+            }}>Нет</button>
+          </span>
+        ) : null}
         {showOk ? (
           <OkButton
             inline

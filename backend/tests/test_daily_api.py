@@ -337,25 +337,19 @@ class TestFutureRules:
 
 
 class TestSkipReason:
-    def test_a_skipped_entry_without_a_reason_is_rejected(
-        self, client: TestClient, health_area: dict
+    @pytest.mark.parametrize("reason", [None, "", "   "])
+    @pytest.mark.parametrize("offset", [0, 1])
+    def test_skip_can_be_saved_without_a_reason(
+        self, client: TestClient, health_area: dict, reason, offset
     ) -> None:
         habit = create_habit(client, health_area["id"], name="Reading")
-
-        response = put_entry(client, habit["id"], on(0), "skipped")
-
-        assert response.status_code == 422
-        assert response.json()["error"]["code"] == "skip_reason_required"
-
-    def test_a_whitespace_only_reason_is_rejected(
-        self, client: TestClient, health_area: dict
-    ) -> None:
-        habit = create_habit(client, health_area["id"], name="Reading")
-
-        response = put_entry(client, habit["id"], on(0), "skipped", skip_reason="   ")
-
-        assert response.status_code == 422
-        assert response.json()["error"]["code"] == "skip_reason_required"
+        response = put_entry(client, habit["id"], on(offset), "skipped", skip_reason=reason)
+        assert response.status_code == 200, response.text
+        assert response.json()["skip_reason"] is None
+        item = next(item for item in client.get(f"/api/days/{on(offset)}").json()["items"]
+                    if item["habit_id"] == habit["id"])
+        assert item["entry"]["status"] == "skipped"
+        assert item["entry"]["skip_reason"] is None
 
     @pytest.mark.parametrize("status", ["done", "missed"])
     def test_a_reason_on_a_non_skipped_entry_is_rejected(
@@ -1092,20 +1086,18 @@ class TestDatabaseConstraints:
             )
             session.commit()
 
-    def test_rejects_a_skip_without_a_reason(self, session: Session) -> None:
+    def test_accepts_a_skip_without_a_reason(self, session: Session) -> None:
         area_id = area_service.create_area(session, name="Health").id
         habit_id = self._habit_and_area(session, area_id)
-
-        with pytest.raises(IntegrityError):
-            session.execute(
-                text(
-                    "INSERT INTO daily_habit_entries (habit_id, entry_date, status, "
-                    "created_at, updated_at) VALUES (:habit_id, :day, 'skipped', "
-                    "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
-                ),
-                {"habit_id": habit_id, "day": TODAY.isoformat()},
-            )
-            session.commit()
+        session.execute(text(
+            "INSERT INTO daily_habit_entries (habit_id, entry_date, status, "
+            "created_at, updated_at) VALUES (:habit_id, :day, 'skipped', "
+            "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        ), {"habit_id": habit_id, "day": TODAY.isoformat()})
+        session.commit()
+        assert session.execute(text(
+            "SELECT skip_reason FROM daily_habit_entries WHERE habit_id = :id"
+        ), {"id": habit_id}).scalar_one() is None
 
     def test_rejects_a_whitespace_only_reason(self, session: Session) -> None:
         """A reason that is only spaces is not a reason, in the database too."""
@@ -1204,3 +1196,20 @@ class TestDatabaseConstraints:
         """Sanity check that the ORM model is registered on the same metadata."""
         assert Habit.__tablename__ == "habits"
         assert "daily_habit_entries" in {t.name for t in Habit.metadata.tables.values()}
+
+
+def test_optional_skip_reason_survives_backup_restore(client, health_area):
+    habit = create_habit(client, health_area["id"], name="Reading")
+    result = put_entry(client, habit["id"], on(0), "skipped")
+    assert result.status_code == 200
+    raw = client.get("/api/backup").content
+    preview = client.post("/api/backup/validate", content=raw)
+    assert preview.status_code == 200, preview.text
+    restored = client.post("/api/backup/restore", content=raw, headers={
+        "X-Tracker-Confirm-Restore": "replace",
+        "X-Tracker-Validation-Token": preview.json()["validation_token"],
+    })
+    assert restored.status_code == 200, restored.text
+    entry = client.get(f"/api/habits/{habit['id']}/entries/{on(0)}").json()
+    assert entry["status"] == "skipped"
+    assert entry["skip_reason"] is None

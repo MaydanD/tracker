@@ -1,11 +1,19 @@
 /** Daily tracking endpoints: one calendar date, one habit's record on that date. */
 
-import { apiRequest } from './client'
+import { ApiError, apiRequest } from './client'
 import type { DailyEntry, DailyEntryInput, DayState } from './types'
 
 /** The state of a calendar date: every habit that existed then, with its entry. */
-export function fetchDay(entryDate: string, signal?: AbortSignal): Promise<DayState> {
-  return apiRequest<DayState>(`/api/days/${encodeURIComponent(entryDate)}`, { signal })
+export async function fetchDay(entryDate: string, signal?: AbortSignal): Promise<DayState> {
+  const day = await apiRequest<DayState>(`/api/days/${encodeURIComponent(entryDate)}`, { signal })
+  // A pre-scale server omits this metadata entirely. Treating that as null
+  // would turn stored scales into completion controls and send invalid marks.
+  if (day.items.some(item => item.value_type === undefined || item.value_labels === undefined)) {
+    throw new ApiError('The running backend predates value scales.', {
+      status: 409, code: 'outdated_tracking_api',
+    })
+  }
+  return day
 }
 
 /**

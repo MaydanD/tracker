@@ -178,3 +178,26 @@ def test_upgrade_intermediate_head_preserves_all_columns(tmp_path):
         assert c.execute(text("select * from daily_habit_entries")).all() == before
         assert c.execute(text("pragma foreign_key_check")).all() == []
     engine.dispose()
+
+
+def test_custom_scale_labels_survive_create_day_and_entry_api(client, app, health_area):
+    labels = ["Мало", "Средне", "Много", "Очень много"]
+    response = client.post("/api/habits", json={
+        **habit_payload(area_id=health_area["id"]),
+        "value_type": "ordinal_4", "value_labels": labels, "direction": "neutral",
+    })
+    assert response.status_code == 201, response.text
+    habit_id = response.json()["id"]
+    today = app.state.clock.today()
+    for value in range(4):
+        item = next(item for item in client.get(f"/api/days/{today}").json()["items"]
+                    if item["habit_id"] == habit_id)
+        assert item["value_type"] == "ordinal_4"
+        assert item["value_labels"] == labels
+        assert item["tracking_mode"] == "binary"
+        result = client.put(f"/api/habits/{habit_id}/entries/{today}",
+                            json={"status": "done", "value": value})
+        assert result.status_code == 200, result.text
+        item = next(item for item in client.get(f"/api/days/{today}").json()["items"]
+                    if item["habit_id"] == habit_id)
+        assert item["entry"]["value"] == value

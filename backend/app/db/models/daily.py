@@ -56,13 +56,11 @@ class DailyHabitEntry(Base):
             "status IN ('done', 'missed', 'skipped')",
             name="status_values",
         ),
-        # The skip reason and the status must agree, so a reason can never be lost
-        # or invented by a partial write. `trim` rejects whitespace-only reasons,
-        # which is what the domain layer's normalisation also refuses.
+        # A reason is optional, but supplied reasons must be nonblank and belong
+        # to a skipped entry. Blank API input normalizes to NULL.
         CheckConstraint(
-            "(status = 'skipped' AND skip_reason IS NOT NULL "
-            "AND length(trim(skip_reason)) > 0) OR "
-            "(status <> 'skipped' AND skip_reason IS NULL)",
+            "skip_reason IS NULL OR "
+            "(status = 'skipped' AND length(trim(skip_reason)) > 0)",
             name="skip_reason_matches_status",
         ),
         CheckConstraint(

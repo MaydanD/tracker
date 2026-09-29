@@ -30,7 +30,6 @@ from app.domain.errors import (
     QuantityDecimalNotAllowedError,
     QuantityNotAllowedError,
     SkipReasonNotAllowedError,
-    SkipReasonRequiredError,
 )
 from app.domain.habits import HabitConfig
 from app.domain.schedule import Schedule
@@ -218,13 +217,9 @@ class TestFutureRules:
 
 
 class TestSkipReason:
-    def test_a_skipped_entry_requires_a_reason(self) -> None:
-        with pytest.raises(SkipReasonRequiredError):
-            entry(status="skipped")
-
-    def test_a_whitespace_only_reason_is_not_a_reason(self) -> None:
-        with pytest.raises(SkipReasonRequiredError):
-            entry(status="skipped", skip_reason="   ")
+    @pytest.mark.parametrize("reason", [None, "", "   "])
+    def test_a_skipped_entry_accepts_an_optional_reason(self, reason) -> None:
+        assert entry(status="skipped", skip_reason=reason).skip_reason is None
 
     @pytest.mark.parametrize("status", ["done", "missed"])
     def test_a_reason_is_rejected_for_non_skipped_statuses(self, status: str) -> None:

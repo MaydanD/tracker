@@ -64,7 +64,6 @@ from app.domain.errors import (
     QuantityDecimalNotAllowedError,
     QuantityNotAllowedError,
     SkipReasonNotAllowedError,
-    SkipReasonRequiredError,
     ValueNotAllowedError,
     ValueRequiredError,
 )
@@ -255,19 +254,17 @@ def ensure_status_allowed_on(
 def normalise_skip_reason(status: EntryStatus, skip_reason: str | None) -> str | None:
     """Trim a skip reason and keep it strictly tied to ``skipped``.
 
-    A skipped entry must say why. For ``done``/``missed`` the field is cleared
-    rather than stored, so a reason can never be silently reinterpreted later.
+    A skipped entry may omit its reason. Nonblank reasons are only allowed for
+    ``skipped``, so a reason can never be silently reinterpreted later.
     """
     cleaned = " ".join((skip_reason or "").split())
 
     if status is EntryStatus.SKIPPED:
-        if not cleaned:
-            raise SkipReasonRequiredError("Enter why the habit was skipped.")
         if len(cleaned) > SKIP_REASON_MAX_LENGTH:
             raise InvalidSkipReasonError(
                 f"A skip reason can be at most {SKIP_REASON_MAX_LENGTH} characters."
             )
-        return cleaned
+        return cleaned or None
 
     if cleaned:
         raise SkipReasonNotAllowedError(

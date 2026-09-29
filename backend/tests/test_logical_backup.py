@@ -18,7 +18,7 @@ from app.db.models import AppMetadata
 from app.main import create_app
 from app.schemas.backup import BackupDataV1
 from app.services import backup, habits
-from tests.helpers import FrozenClock, run_migrations
+from tests.helpers import FrozenClock, HEAD_REVISION, run_migrations
 from tests.test_records_api import seed, TODAY, MON
 from tests.test_progress_api import config
 
@@ -209,7 +209,9 @@ def test_download_export_headers_read_only_no_secrets(client, app, session, payl
                     raw = b' '.join(archive.read(name) for name in archive.namelist())
                     if path == '/api/backup':
                         manifest = json.loads(archive.read('manifest.json'))
-                        assert manifest == payload['manifest'] | {'created_at': manifest['created_at']}
+                        assert manifest == payload['manifest'] | {
+                            'created_at': manifest['created_at'], 'alembic_revision': HEAD_REVISION,
+                        }
                     else:
                         assert len(archive.namelist()) == 7
                         state = list(csv.DictReader(io.StringIO(archive.read('daily_states.csv').decode('utf-8-sig'))))[0]

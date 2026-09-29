@@ -34,8 +34,8 @@ V1_REVISION = "c3f1a7b24d90"
 # A v2 archive carries the value scale of every habit version and the recorded
 # answer of every entry. The format is unchanged since the value scales landed,
 # so every revision from there on writes and reads the same archive.
-V2_REVISION = "3f8a5c1d72be"
-V2_REVISIONS = (V2_REVISION, "9e2c7b4a610f", "5824a510506e")
+V2_REVISION = "a7c491de620b"
+V2_REVISIONS = (V2_REVISION, "3f8a5c1d72be", "9e2c7b4a610f", "5824a510506e")
 TOKEN_TTL = 1800
 # Explicit allowlist: infrastructure tables and future secret-bearing tables
 # cannot accidentally join a backup. Columns are pinned by the current DTO below.

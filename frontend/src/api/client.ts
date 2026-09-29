@@ -86,6 +86,7 @@ export function describeApiError(error: unknown): string {
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
+  outdated_tracking_api: 'Сервер Tracker использует старую версию. Перезапустите Tracker через stop-tracker.bat и start-tracker.bat, затем обновите страницу.',
   invalid_daily_state: 'Проверьте состояние дня: оценки от 1 до 5, время от 0 до 24 часов; уточнения алкоголя и игр должны соответствовать выбранному ответу.',
   empty_daily_state: 'Укажите хотя бы одно значение. Для удаления записи нажмите «Очистить состояние».',
   future_daily_state: 'Состояние будущего дня нельзя заполнять.',

@@ -11,6 +11,10 @@ import type { DailyEntry, DailyEntryInput, DayItem } from '../../api/types'
 import { jsonResponse, stubApi } from '../../test/fetchStub'
 import { dayItemFixture, dailyEntryFixture } from '../../test/fixtures'
 import { HabitCard } from './HabitCard'
+import { createHabit } from '../../api/habits'
+import { fetchDay } from '../../api/daily'
+import { createFakeApi, stubFakeApi } from '../../test/fakeApi'
+import { areaFixture, habitFixture } from '../../test/fixtures'
 
 // ---------------------------------------------------------------------------
 // Fake rAF
@@ -357,10 +361,10 @@ describe('HabitCard', () => {
     renderCard()
 
     fireEvent.click(screen.getByRole('button', { name: 'Осознанный пропуск' }))
-    expect(screen.getByPlaceholderText('Причина пропуска')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Причина пропуска (необязательно)')).toBeInTheDocument()
   })
 
-  it('does not save a skipped entry until a reason is typed', async () => {
+  it('does not save a skipped entry before explicit confirmation', async () => {
     const stub = stubApi({
       [`PUT /api/habits/1/entries/${TODAY}`]: () =>
         jsonResponse(makeEntry(1, 'skipped')),
@@ -425,7 +429,7 @@ describe('HabitCard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Осознанный пропуск' }))
 
-    const reason = screen.getByPlaceholderText('Причина пропуска')
+    const reason = screen.getByPlaceholderText('Причина пропуска (необязательно)')
     const note = screen.getByPlaceholderText('Заметка (необязательно)')
     expect(reason.parentElement).toHaveClass('ccard__footer')
     expect(reason.parentElement).toBe(note.parentElement)
@@ -627,5 +631,62 @@ describe('HabitCard — «ОК» stays while a field is in use', () => {
     expect(await screen.findByRole('button', { name: /ОК/ })).toBeInTheDocument()
     expect(quantity).toHaveValue(12)
     expect(counting()).toBe(false)
+  })
+})
+
+
+describe('HabitCard — tracking regressions', () => {
+  beforeEach(installFakeRaf)
+
+  it('creates a custom scale, shows its words and saves numeric positions', async () => {
+    const api = createFakeApi({ areas: [areaFixture()] })
+    stubFakeApi(api)
+    const labels = ['Мало', 'Средне', 'Много', 'Очень много']
+    const habit = await createHabit({
+      name: 'Своя шкала', area_id: 1, weight: 1, importance: 'normal',
+      tracking_mode: 'binary', quantity_unit: null, quantity_allows_decimal: false,
+      value_type: 'ordinal_4', value_labels: labels, direction: 'neutral',
+      schedule: { type: 'daily' },
+    })
+    const day = await fetchDay(TODAY)
+    const item = day.items.find(item => item.habit_id === habit.id)!
+    renderCard(item)
+    for (const label of labels) expect(screen.getByRole('button', { name: label })).toBeVisible()
+    expect(screen.queryByRole('group', { name: 'Отметка привычки' })).not.toBeInTheDocument()
+    for (const value of [0, 1, 2, 3]) {
+      fireEvent.click(screen.getByRole('button', { name: labels[value] }))
+      await waitFor(() => expect(api.entries[0]?.value).toBe(value))
+      expect(api.entries[0]?.status).toBe('done')
+    }
+  })
+
+  it.each([null, '  поездка  '])('skip can be confirmed with optional reason %s', async reason => {
+    const api = createFakeApi({ habits: [habitFixture({ id: 1 })] })
+    const stub = stubFakeApi(api)
+    const { onSettled } = renderCard()
+    fireEvent.click(screen.getByRole('button', { name: 'Осознанный пропуск' }))
+    expect(screen.getByRole('button', { name: 'Да' })).toBeEnabled()
+    if (reason !== null) fireEvent.change(screen.getByLabelText('Причина пропуска'), { target: { value: reason } })
+    await act(async () => {})
+    expect(stub).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Да' }))
+    await waitFor(() => expect(onSettled).toHaveBeenCalled())
+    expect(api.entries[0]).toMatchObject({ status: 'skipped', skip_reason: reason?.trim() ?? null })
+    expect(screen.queryByRole('group', { name: 'Подтвердить пропуск' })).not.toBeInTheDocument()
+  })
+
+  it.each([null, makeEntry()])('skip can be cancelled and restores the original entry %s', async entry => {
+    const stub = stubApi({})
+    const { onTimerDone } = renderCard({ entry })
+    fireEvent.click(screen.getByRole('button', { name: 'Осознанный пропуск' }))
+    fireEvent.change(screen.getByLabelText('Причина пропуска'), { target: { value: 'передумал' } })
+    fireEvent.blur(screen.getByLabelText('Причина пропуска'), { relatedTarget: null })
+    act(() => advanceRaf(10_000))
+    expect(onTimerDone).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Нет' }))
+    await act(async () => {})
+    expect(stub).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText('Причина пропуска')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Выполнено' })).toHaveAttribute('aria-pressed', entry ? 'true' : 'false')
   })
 })

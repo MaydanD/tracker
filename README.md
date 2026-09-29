@@ -521,7 +521,7 @@ the screen and the API always agree on which rules apply.
 is replaced, never duplicated, so saving the same day twice (or re-saving after a
 mistake) leaves exactly one row. `habit_id + entry_date` is unique in the database.
 
-**Skip reason and note are separate fields.** A `skipped` record requires a reason
+**Skip reason and note are separate fields.** A `skipped` record accepts an optional reason
 (travel, illness, holiday, a deliberate rest day, or free text); `done`/`missed`
 may not carry one, so a reason can never drift into a different meaning. The note
 is optional for any status.

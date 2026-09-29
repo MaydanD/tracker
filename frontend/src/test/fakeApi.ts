@@ -329,9 +329,6 @@ export function createFakeApi(options: FakeApiOptions = {}): FakeApi {
     }
 
     const reason = (input.skip_reason ?? '').trim()
-    if (status === 'skipped' && reason === '') {
-      return unprocessable('skip_reason_required', 'Enter why the habit was skipped.')
-    }
     if (status !== 'skipped' && reason !== '') {
       return unprocessable(
         'skip_reason_not_allowed',
@@ -361,7 +358,7 @@ export function createFakeApi(options: FakeApiOptions = {}): FakeApi {
       value: null,
       quantity_value: quantity,
       quantity_unit: habit.quantity_unit,
-      skip_reason: status === 'skipped' ? reason : null,
+      skip_reason: status === 'skipped' ? reason || null : null,
       note: note === '' ? null : note,
       created_at: existing?.created_at ?? stamp(),
       updated_at: stamp(),

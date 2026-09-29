@@ -130,10 +130,6 @@ export function DayHabitRow({
   function validate(current: Draft): string[] {
     const found: string[] = []
 
-    if (current.status === 'skipped' && current.skipReason.trim() === '') {
-      found.push('Укажите причину пропуска.')
-    }
-
     if (tracksQuantity && current.quantity.trim() !== '') {
       const value = Number(current.quantity.replace(',', '.'))
       if (Number.isNaN(value)) {
@@ -157,7 +153,7 @@ export function DayHabitRow({
     return {
       status: current.status as EntryStatus,
       quantity_value: quantity,
-      skip_reason: current.status === 'skipped' ? current.skipReason.trim() : null,
+      skip_reason: current.status === 'skipped' ? current.skipReason.trim() || null : null,
       note: current.note.trim() === '' ? null : current.note.trim(),
     }
   }
@@ -276,7 +272,7 @@ export function DayHabitRow({
             {draft.status === 'skipped' ? (
               <div className="field">
                 <label className="field__label" htmlFor={reasonId}>
-                  Причина пропуска
+                  Причина пропуска (необязательно)
                 </label>
                 <input
                   id={reasonId}

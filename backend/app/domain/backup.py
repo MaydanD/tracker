@@ -103,6 +103,7 @@ def validate_relations(data: BackupDataV1) -> None:
         if getattr(version, "value_type", None) is None:
             require(recorded is None, "Значение указано у привычки без шкалы.")
         else:
+            require(row.status == "done", "Запись привычки со шкалой должна содержать ответ, а не пропуск.")
             require(recorded is not None, "У привычки со шкалой нет значения.")
             validate_value(ValueType(version.value_type), recorded)
         # Same-day config edits can change mode/unit after an observation was

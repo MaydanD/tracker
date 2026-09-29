@@ -496,10 +496,12 @@ describe('autosave keeps «ОК» mounted and geometry-stable', () => {
   it('keeps «ОК» in place while the skip reason autosaves', async () => {
     const backend = api(); grid(); await loaded()
     pick('Чтение', 'Осознанный пропуск')
-    const reason = within(card('Чтение')).getByPlaceholderText('Причина пропуска')
+    const reason = within(card('Чтение')).getByPlaceholderText('Причина пропуска (необязательно)')
 
     const first = gate(); backend.controls.pause = first
     fireEvent.focus(reason); fireEvent.change(reason, { target: { value: 'болел' } })
+    expect(backend.habits).toHaveLength(0)
+    fireEvent.click(within(card('Чтение')).getByRole('button', { name: 'Да' }))
     await waitFor(() => expect(backend.habits).toHaveLength(1))
     await act(async () => first.resolve())
     await saved('Чтение')

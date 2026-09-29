@@ -25,7 +25,7 @@ STAGE_8_REVISION = "b2631e796164"
 STAGE_10_REVISION = "c3f1a7b24d90"
 #: Head: habits that can be answered with a value, carry an importance and a
 #: stable machine key, and hold the ordinary score weight a fresh install uses.
-HEAD_REVISION = "3f8a5c1d72be"
+HEAD_REVISION = "a7c491de620b"
 
 
 @dataclass(frozen=True)
