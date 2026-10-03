@@ -39,6 +39,18 @@ def get_calendar_range(
         is_future = curr > today
         has_obligations = dp.required_weight > 0
         daily_score = dp.score if not is_future else None
+        # Match the cards on the check-in screen, independently of their score
+        # or schedule. Zero and negative answers are still recorded answers.
+        total_items = 0
+        answered_items = 0
+        for history in histories:
+            version = history.version_on(curr)
+            status = history.entries.get(curr)
+            if version is None or (history.archived_on is not None and status is None):
+                continue
+            total_items += 1
+            if status is not None and (not version.tracks_value or curr in history.values):
+                answered_items += 1
         area_totals: dict[int, list[int]] = {}
         habit_scores: list[dict[str, object]] = []
         if include_trends and not is_future:
@@ -95,6 +107,8 @@ def get_calendar_range(
             "has_daily_state": st is not None,
             "mood": st.mood if st is not None else None,
             "is_future": is_future,
+            "total_items": total_items,
+            "answered_items": answered_items,
             "area_scores": area_scores,
             "habit_scores": habit_scores,
         })

@@ -12,6 +12,8 @@ import {
   stubUnreachableBackend,
 } from './test/fetchStub'
 import { detailFixture, experimentFixture } from './test/experimentsFixture'
+import { dayStateFixture } from './test/fixtures'
+import { progressFixture } from './test/progressFixture'
 
 /** Backend state now lives on the settings screen, not in the top bar. */
 function openSettings() {
@@ -19,6 +21,27 @@ function openSettings() {
 }
 
 describe('App shell', () => {
+  it('opens a linked check-in date and keeps the URL in sync when navigating', async () => {
+    const date = '2026-09-25'
+    const nextDate = '2026-09-26'
+    stubApi({
+      [`GET /api/days/${date}`]: () => jsonResponse(dayStateFixture([], { entry_date: date })),
+      [`GET /api/days/${nextDate}`]: () => jsonResponse(dayStateFixture([], { entry_date: nextDate })),
+      [`GET /api/progress/days/${date}`]: () => jsonResponse(progressFixture(date)),
+      [`GET /api/progress/days/${nextDate}`]: () => jsonResponse(progressFixture(nextDate)),
+      'GET /api/calendar': () => jsonResponse([]),
+    })
+    window.location.hash = `#/check-in?date=${date}`
+    const view = render(<App />)
+    await screen.findByText(/На эту дату привычек ещё нет/)
+    expect(screen.getByLabelText('Выбрать дату')).toHaveValue(date)
+    fireEvent.click(screen.getByRole('button', { name: 'Следующий день' }))
+    await waitFor(() => expect(window.location.hash).toBe(`#/check-in?date=${nextDate}`))
+    expect(screen.getByLabelText('Выбрать дату')).toHaveValue(nextDate)
+    view.unmount()
+    window.location.hash = '#/'
+  })
+
   it('redirects old area bookmarks to habits and removes the area navigation link', async () => {
     stubHealthyBackend()
     window.location.hash = '#/areas'

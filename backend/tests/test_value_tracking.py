@@ -74,6 +74,7 @@ def test_binary_two_is_rejected(client, app, health_area):
     ("ordinal_4", "negative", 0, 1), ("ordinal_4", "negative", 1, 2/3),
     ("ordinal_4", "negative", 2, 1/3), ("ordinal_4", "negative", 3, 0),
     ("binary", "positive", 0, 0), ("binary", "positive", 1, 1),
+    ("binary", "negative", 0, 1), ("binary", "negative", 1, 0),
 ])
 def test_direction_score_and_zero_streak(client, app, session, health_area, kind, direction, value, expected):
     habit_id = create_value(client, health_area["id"], kind=kind, direction=direction, weight=3, importance="low")
@@ -84,7 +85,10 @@ def test_direction_score_and_zero_streak(client, app, session, health_area, kind
     assert result.required_weight == 3
     assert result.score == pytest.approx(expected * 100)
     assert result.filled_count == 1
-    assert current_streak(history, today).current_streak == 1
+    expected_streak = int(direction != "negative" or value == 0)
+    assert current_streak(history, today).current_streak == expected_streak
+    dashboard = client.get('/api/dashboard').json()
+    assert next(s for s in dashboard['streaks'] if s['habit_id'] == habit_id)['current_streak'] == expected_streak
     assert week_progress((history,), today, today).completed_weight == pytest.approx(expected * 3)
 
 

@@ -7,6 +7,7 @@ their own obligations. Thus schedule changes never double-count a completion.
 
 Value entries count as recorded days, including zero. Evaluation uses direction;
 neutral answers contribute to completion only. Importance never enters score.
+Negative value habits extend streaks only on an explicitly recorded zero.
 """
 
 from collections.abc import Iterator
@@ -57,6 +58,13 @@ class HabitHistory:
         if version is not None and version.tracks_value:
             return self.values.get(on) is not None
         return self.entries.get(on) == "done"
+
+    def streak_satisfied_on(self, on: date) -> bool:
+        """Apply the direction effective on this date without changing coverage."""
+        version = self.version_on(on)
+        if version is not None and version.tracks_value and version.direction == "negative":
+            return self.values.get(on) == 0
+        return self.marked_on(on)
 
     def evaluation(self, on: date) -> tuple[float, int]:
         version = self.version_on(on)
@@ -118,6 +126,8 @@ class WeekHabitProgress(Score):
     daily_completed_count: int
     weekly_quota: int
     weekly_completed_count: int
+    # Streak eligibility is separate from recording and fractional score.
+    weekly_streak_count: int
     weekly_weight: int | None
     weekly_effective_from: date | None
     preferred_weekdays: tuple[int, ...]
@@ -172,6 +182,7 @@ def week_habit_progress(
     start, end = week_bounds(on)
     daily_required = daily_done = required = completed = weekly_done = 0
     weekly_earned = 0.0
+    weekly_streak_count = 0
     anchor: Version | None = None
     last: Version | None = None
     for ordinal in range(start.toordinal(), end.toordinal() + 1):
@@ -190,6 +201,7 @@ def week_habit_progress(
         else:
             anchor = anchor or version
             weekly_done += int(done)
+            weekly_streak_count += int(day <= today and habit.streak_satisfied_on(day))
             if done:
                 weekly_earned += earned / denominator if denominator else 0
     if last is None:
@@ -209,6 +221,7 @@ def week_habit_progress(
         quota=daily_required + quota, completed_count=daily_done + weekly_done,
         daily_required_count=daily_required, daily_completed_count=daily_done,
         weekly_quota=quota, weekly_completed_count=weekly_done,
+        weekly_streak_count=weekly_streak_count,
         weekly_weight=anchor.weight if anchor else None,
         weekly_effective_from=anchor.effective_from if anchor else None,
         preferred_weekdays=anchor.schedule.weekdays if anchor else (),
@@ -284,7 +297,7 @@ def _iter_daily_spans(
             config is not None
             and config.schedule.type == ScheduleType.DAILY
         )
-        if is_daily and habit.marked_on(cursor):
+        if is_daily and habit.streak_satisfied_on(cursor):
             if length == 0:
                 run_start = cursor
             length += 1
@@ -405,7 +418,7 @@ def streak_summary(habit: HabitHistory, today: date) -> StreakSummary:
             if run > best:
                 best, best_end = run, run_end
             run, run_end = 0, None
-        elif progress.weekly_completed_count >= progress.weekly_quota:
+        elif progress.weekly_streak_count >= progress.weekly_quota:
             run += 1
             run_end = cursor
         elif cursor != current_week:

@@ -1,4 +1,4 @@
-import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { HashRouter, Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
 
 import { AppShell } from './layout/AppShell'
 import { AreasPage } from './pages/AreasPage'
@@ -11,6 +11,12 @@ import { HabitsPage } from './pages/HabitsPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { SettingsPage } from './pages/SettingsPage'
 
+function CheckInRoute() {
+  const [params, setParams] = useSearchParams()
+  return <CheckInPage date={params.get('date') ?? undefined}
+    onDateChange={(date) => setParams({ date }, { replace: true })} />
+}
+
 /**
  * HashRouter on purpose: the future pywebview/PyInstaller build loads the SPA
  * straight from disk, where the History API is unavailable. Using hashes now
@@ -22,7 +28,7 @@ export default function App() {
       <Routes>
         <Route element={<AppShell />}>
           <Route index element={<DashboardPage />} />
-          <Route path="check-in" element={<CheckInPage />} />
+          <Route path="check-in" element={<CheckInRoute />} />
           <Route path="calendar" element={<Navigate to="/analytics" replace />} />
           <Route path="habits" element={<HabitsPage />} />
           <Route path="areas" element={<AreasPage />} />

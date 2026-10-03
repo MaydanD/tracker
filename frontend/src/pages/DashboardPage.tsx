@@ -4,6 +4,7 @@ import { fetchDashboard } from '../api/dashboard'
 import { BackupReminder } from '../components/BackupReminder'
 import { ErrorBanner, LoadingText } from '../components/Feedback'
 import { DashboardAreaTrends } from '../components/dashboard/DashboardAreaTrends'
+import { RecentDays } from '../components/daily/RecentDays'
 import { OwlAssistantBanner } from '../components/owl/OwlAssistantBanner'
 import { resolveOwlAsset } from '../components/owl/owlAssets'
 import { setOwl } from '../components/owl/owlStore'
@@ -44,6 +45,7 @@ export function DashboardPage() {
 
   return (
     <section className="page dashboard-page">
+      <RecentDays today={today} missedOnly />
       <figure className="dashboard-character">
         <img
           className="dashboard-character__image"

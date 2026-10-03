@@ -1,6 +1,7 @@
 .dashboard-page {
   display: grid;
   grid-template-areas:
+    "missed missed"
     "owl message"
     "owl trends"
     "owl week"
@@ -289,6 +290,7 @@
 @media (max-width: 960px) {
   .dashboard-page {
     grid-template-areas:
+      "missed"
       "message"
       "owl"
       "trends"

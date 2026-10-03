@@ -4,6 +4,8 @@ import type { DailyStateRecord } from './dailyState'
 
 export interface CalendarDaySummaryRead {
   entry_date: string
+  total_items: number
+  answered_items: number
   daily_score: number | null
   completed_weight: number
   required_weight: number

@@ -1,0 +1,41 @@
+.recent-days {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.recent-days--missed {
+  grid-area: missed;
+  border-color: #efb3b3;
+  background: #fff8f8;
+}
+
+.recent-days__header { margin-bottom: 12px; }
+.recent-days__header h2 { font-size: 15px; font-weight: 650; }
+.recent-days__header p { margin-top: 3px; color: var(--color-text-muted); font-size: 12px; }
+.recent-days__list { display: flex; gap: 8px; overflow-x: auto; padding: 4px 3px 8px; }
+.recent-day {
+  display: flex;
+  flex: 1 0 90px;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 2px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.recent-day--complete { border-color: #2f9e5f; color: #226b43; background: #f1faf4; }
+.recent-day--incomplete { border-color: #d55c5c; color: #a33232; background: #fff5f5; }
+.recent-days--missed .recent-day { flex: 0 0 104px; }
+.recent-day__weekday, .recent-day__status { font-size: 11px; }
+.recent-day strong { font-size: 14px; }
+.recent-day[aria-pressed="true"] { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.recent-day:hover { box-shadow: 0 2px 6px #1c253020; }
+.recent-day:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }

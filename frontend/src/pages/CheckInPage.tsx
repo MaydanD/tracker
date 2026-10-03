@@ -5,9 +5,10 @@ import { fetchProgress } from '../api/progress'
 import { ProgressSummary } from '../components/daily/ProgressSummary'
 import { EmptyState, ErrorBanner, InfoBanner, LoadingText } from '../components/Feedback'
 import { DayNavigator } from '../components/daily/DayNavigator'
+import { RecentDays } from '../components/daily/RecentDays'
 import { CheckInGrid } from '../components/daily/CheckInGrid'
 import { refreshOwl } from '../components/owl/owlStore'
-import { formatDayLabel, localTodayIso } from '../components/daily/dates'
+import { formatDayLabel, localTodayIso, parseIsoDate, toIsoDate } from '../components/daily/dates'
 import { useAsyncData } from '../hooks/useAsyncData'
 
 /**
@@ -26,8 +27,14 @@ import { useAsyncData } from '../hooks/useAsyncData'
  * instead of two. The old daily-state records stay readable through their own
  * endpoint for history and analytics.
  */
-export function CheckInPage() {
-  const [entryDate, setEntryDate] = useState(() => localTodayIso())
+export function CheckInPage({ date, onDateChange }: { date?: string; onDateChange?: (date: string) => void }) {
+  const [localDate, setLocalDate] = useState(() => localTodayIso())
+  const entryDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) && toIsoDate(parseIsoDate(date)) === date
+    ? date : localDate
+  function setEntryDate(value: string) {
+    setLocalDate(value)
+    onDateChange?.(value)
+  }
   const [revision, setRevision] = useState(0)
 
   const { data, error, loading } = useAsyncData(
@@ -55,6 +62,8 @@ export function CheckInPage() {
   return (
     <section className="page checkin-page">
       <h1 className="sr-only">Итоги дня</h1>
+
+      <RecentDays today={today} selectedDate={entryDate} onSelect={setEntryDate} revision={revision} />
 
       <DayNavigator
         entryDate={entryDate}

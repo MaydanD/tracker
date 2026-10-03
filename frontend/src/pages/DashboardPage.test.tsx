@@ -129,7 +129,7 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('img', { name: 'Сова-помощник' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Заполнить' })).not.toBeInTheDocument()
     const page = container.querySelector('.dashboard-page')
-    expect(page?.firstElementChild).toHaveClass('dashboard-character')
+    expect(page?.querySelector('.dashboard-character')).toBeInTheDocument()
     expect(page?.querySelector('.dashboard-message--quiet')).toBeInTheDocument()
     expect(page?.querySelector('.dashboard-trends')).toBeInTheDocument()
     expect(page?.querySelector('.dashboard-week')).toBeInTheDocument()

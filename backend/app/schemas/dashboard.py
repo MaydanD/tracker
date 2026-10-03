@@ -49,6 +49,8 @@ class CalendarHabitScoreRead(ReadModel):
 
 class CalendarDaySummaryRead(ReadModel):
     entry_date: date
+    total_items: int
+    answered_items: int
     daily_score: float | None
     completed_weight: float
     required_weight: int

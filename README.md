@@ -565,7 +565,11 @@ materialize scores/streaks; no schema migration is needed.
 
 Daily streaks count consecutive `done` days. Historical missed/skipped/unrecorded
 required days break them; an unfinished today preserves yesterday's streak and a
-`done` today extends it immediately. Weekly streaks count consecutive successful
+`done` today extends it immediately. For negative value habits, only an explicit
+`0` extends a streak; a recorded value above zero breaks a daily streak immediately,
+while an unanswered today preserves it. Such values still count as filled answers.
+Weekly quotas for streaks count zero-valued dates for negative habits, using each
+date's historical direction. Weekly streaks count consecutive successful
 Mon–Sun quotas. An incomplete current week preserves previous weeks; reaching
 quota extends the streak immediately. An unfinished Sunday is still pending;
 failure is resolved on Monday. Live score already includes outstanding
